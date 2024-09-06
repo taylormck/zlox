@@ -15,6 +15,23 @@ const Lexeme = struct {
     type: TokenType,
     // TODO: add additional info, such as line number
     // or column number
+
+    pub fn to_string(self: *const @This()) []const u8 {
+        switch (self.type) {
+            .LEFT_PAREN => {
+                return "LEFT_PAREN ( null\n";
+            },
+            .RIGHT_PAREN => {
+                return "RIGHT_PAREN ) null\n";
+            },
+            .EOF => {
+                return "EOF  null\n";
+            },
+            .NEW_LINE => {
+                return "NEW_LINE null\n";
+            },
+        }
+    }
 };
 
 pub fn scan(input: []u8) !std.ArrayList(Lexeme) {
@@ -40,7 +57,9 @@ pub fn scan(input: []u8) !std.ArrayList(Lexeme) {
                         try result.append(Lexeme{ .type = .NEW_LINE });
                     },
                     '0' => {
-                        try result.append(Lexeme{ .type = .EOF });
+                        // We don't add the token here, because we add it
+                        // after the loop.
+                        break;
                     },
                     else => {
                         // TODO: print an error
@@ -54,6 +73,9 @@ pub fn scan(input: []u8) !std.ArrayList(Lexeme) {
 
         current += 1;
     }
+
+    // Always add an EOF token to the end
+    try result.append(Lexeme{ .type = .EOF });
 
     return result;
 }

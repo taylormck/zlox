@@ -25,7 +25,10 @@ pub fn main() !void {
     // Uncomment this block to pass the first stage
     if (file_contents.len > 0) {
         const lexemes = try scanner.scan(file_contents);
-        try std.io.getStdOut().writer().print("Lexemes: {}", .{lexemes.items.len}); // Placeholder, remove this line when implementing the scanner
+
+        for (lexemes.items) |lexeme| {
+            try std.io.getStdOut().writer().print("{s}", .{lexeme.to_string()});
+        }
     } else {
         try std.io.getStdOut().writer().print("EOF  null\n", .{}); // Placeholder, remove this line when implementing the scanner
     }
