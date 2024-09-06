@@ -7,10 +7,16 @@ const TokenType = enum {
     RIGHT_PAREN,
     LEFT_BRACE,
     RIGHT_BRACE,
+    COMMA,
+    DOT,
+    MINUS,
+    PLUS,
+    SEMICOLON,
+    STAR,
 
     // Double character tokens
-    EOF,
     NEW_LINE,
+    EOF,
 };
 
 const Lexeme = struct {
@@ -32,11 +38,29 @@ const Lexeme = struct {
             .RIGHT_BRACE => {
                 return "RIGHT_BRACE } null\n";
             },
-            .EOF => {
-                return "EOF  null\n";
+            .COMMA => {
+                return "COMMA , null\n";
+            },
+            .DOT => {
+                return "DOT . null\n";
+            },
+            .MINUS => {
+                return "MINUS - null\n";
+            },
+            .PLUS => {
+                return "PLUS + null\n";
+            },
+            .SEMICOLON => {
+                return "SEMICOLON ; null\n";
+            },
+            .STAR => {
+                return "STAR * null\n";
             },
             .NEW_LINE => {
                 return "NEW_LINE null\n";
+            },
+            .EOF => {
+                return "EOF  null\n";
             },
         }
     }
@@ -61,7 +85,26 @@ pub fn scan(input: []u8) !std.ArrayList(Lexeme) {
             '}' => {
                 try result.append(Lexeme{ .type = .RIGHT_BRACE });
             },
+            ',' => {
+                try result.append(Lexeme{ .type = .COMMA });
+            },
+            '.' => {
+                try result.append(Lexeme{ .type = .DOT });
+            },
+            '-' => {
+                try result.append(Lexeme{ .type = .MINUS });
+            },
+            '+' => {
+                try result.append(Lexeme{ .type = .PLUS });
+            },
+            ';' => {
+                try result.append(Lexeme{ .type = .SEMICOLON });
+            },
+            '*' => {
+                try result.append(Lexeme{ .type = .STAR });
+            },
             ' ', '\t' => {
+                // NOTE: We intentionally ignore whitespace
                 // no-op
             },
             '\\' => {
