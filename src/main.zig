@@ -22,9 +22,20 @@ pub fn main() !void {
     const file_contents = try std.fs.cwd().readFileAlloc(std.heap.page_allocator, filename, std.math.maxInt(usize));
     defer std.heap.page_allocator.free(file_contents);
 
-    const lexemes = try scanner.scan(file_contents);
+    const results = try scanner.scan(file_contents);
+
+    const errors = results[1];
+    for (errors.items) |err| {
+        try std.io.getStdErr().writer().print("{s}\n", .{err});
+    }
+
+    const lexemes = results[0];
 
     for (lexemes.items) |lexeme| {
-        try std.io.getStdOut().writer().print("{s}", .{lexeme.to_string()});
+        try std.io.getStdOut().writer().print("{s}\n", .{lexeme});
+    }
+
+    if (errors.items.len > 0) {
+        std.process.exit(65);
     }
 }

@@ -1,5 +1,11 @@
 const std = @import("std");
 const ArrayList = std.ArrayList;
+const Tuple = std.meta.Tuple;
+
+const ScannerResults = Tuple(&.{
+    ArrayList(Lexeme),
+    ArrayList(ScannerError),
+});
 
 const TokenType = enum {
     // Single character tokens
@@ -24,52 +30,78 @@ const Lexeme = struct {
     // TODO: add additional info, such as line number
     // or column number
 
-    pub fn to_string(self: *const @This()) []const u8 {
+    pub fn format(self: *const @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+
         switch (self.type) {
             .LEFT_PAREN => {
-                return "LEFT_PAREN ( null\n";
+                try writer.writeAll("LEFT_PAREN ( null");
             },
             .RIGHT_PAREN => {
-                return "RIGHT_PAREN ) null\n";
+                try writer.writeAll("RIGHT_PAREN ) null");
             },
             .LEFT_BRACE => {
-                return "LEFT_BRACE { null\n";
+                try writer.writeAll("LEFT_BRACE { null");
             },
             .RIGHT_BRACE => {
-                return "RIGHT_BRACE } null\n";
+                try writer.writeAll("RIGHT_BRACE } null");
             },
             .COMMA => {
-                return "COMMA , null\n";
+                try writer.writeAll("COMMA , null");
             },
             .DOT => {
-                return "DOT . null\n";
+                try writer.writeAll("DOT . null");
             },
             .MINUS => {
-                return "MINUS - null\n";
+                try writer.writeAll("MINUS - null");
             },
             .PLUS => {
-                return "PLUS + null\n";
+                try writer.writeAll("PLUS + null");
             },
             .SEMICOLON => {
-                return "SEMICOLON ; null\n";
+                try writer.writeAll("SEMICOLON ; null");
             },
             .STAR => {
-                return "STAR * null\n";
+                try writer.writeAll("STAR * null");
             },
             .NEW_LINE => {
-                return "NEW_LINE null\n";
+                try writer.writeAll("NEW_LINE null");
             },
             .EOF => {
-                return "EOF  null\n";
+                try writer.writeAll("EOF  null");
             },
         }
     }
 };
 
-pub fn scan(input: []u8) !std.ArrayList(Lexeme) {
+const ScannerErrorType = enum {
+    UNEXPECTED_CHARACTER,
+};
+
+const ScannerError = struct {
+    line: usize,
+    type: ScannerErrorType,
+    token: []u8,
+
+    pub fn format(self: *const @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+
+        switch (self.type) {
+            .UNEXPECTED_CHARACTER => {
+                try writer.print("[line {d}] Error: Unexpected character: {s}", .{ self.line, self.token });
+            },
+        }
+    }
+};
+
+pub fn scan(input: []u8) !ScannerResults {
     var current: usize = 0;
+    var current_line: usize = 1;
 
     var result = ArrayList(Lexeme).init(std.heap.page_allocator);
+    var errors = ArrayList(ScannerError).init(std.heap.page_allocator);
 
     while (current < input.len) {
         switch (input[current]) {
@@ -107,11 +139,17 @@ pub fn scan(input: []u8) !std.ArrayList(Lexeme) {
                 // NOTE: We intentionally ignore whitespace
                 // no-op
             },
+            // This is the magic number for a line feed character
+            10 => {
+                try result.append(Lexeme{ .type = .NEW_LINE });
+                current_line += 1;
+            },
             '\\' => {
                 current += 1;
                 switch (input[current]) {
-                    'n' => {
+                    'n', 'r' => {
                         try result.append(Lexeme{ .type = .NEW_LINE });
+                        current_line += 1;
                     },
                     '0' => {
                         // We don't add the token here, because we add it
@@ -124,7 +162,11 @@ pub fn scan(input: []u8) !std.ArrayList(Lexeme) {
                 }
             },
             else => {
-                // TODO: print an error
+                try errors.append(ScannerError{
+                    .line = current_line,
+                    .type = .UNEXPECTED_CHARACTER,
+                    .token = input[current .. current + 1],
+                });
             },
         }
 
@@ -134,5 +176,5 @@ pub fn scan(input: []u8) !std.ArrayList(Lexeme) {
     // Always add an EOF token to the end
     try result.append(Lexeme{ .type = .EOF });
 
-    return result;
+    return ScannerResults{ result, errors };
 }
