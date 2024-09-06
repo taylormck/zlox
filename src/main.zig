@@ -22,14 +22,9 @@ pub fn main() !void {
     const file_contents = try std.fs.cwd().readFileAlloc(std.heap.page_allocator, filename, std.math.maxInt(usize));
     defer std.heap.page_allocator.free(file_contents);
 
-    // Uncomment this block to pass the first stage
-    if (file_contents.len > 0) {
-        const lexemes = try scanner.scan(file_contents);
+    const lexemes = try scanner.scan(file_contents);
 
-        for (lexemes.items) |lexeme| {
-            try std.io.getStdOut().writer().print("{s}", .{lexeme.to_string()});
-        }
-    } else {
-        try std.io.getStdOut().writer().print("EOF  null\n", .{}); // Placeholder, remove this line when implementing the scanner
+    for (lexemes.items) |lexeme| {
+        try std.io.getStdOut().writer().print("{s}", .{lexeme.to_string()});
     }
 }
