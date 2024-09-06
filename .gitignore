@@ -16,3 +16,6 @@ bin/
 **/.DS_Store
 *.swp
 *~
+
+# Ingore local test files
+test.lox

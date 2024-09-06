@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const scanner = @import("scanner.zig");
+
 pub fn main() !void {
     const args = try std.process.argsAlloc(std.heap.page_allocator);
     defer std.process.argsFree(std.heap.page_allocator, args);
@@ -22,7 +24,8 @@ pub fn main() !void {
 
     // Uncomment this block to pass the first stage
     if (file_contents.len > 0) {
-        @panic("Scanner not implemented");
+        const lexemes = try scanner.scan(file_contents);
+        try std.io.getStdOut().writer().print("Lexemes: {}", .{lexemes.items.len}); // Placeholder, remove this line when implementing the scanner
     } else {
         try std.io.getStdOut().writer().print("EOF  null\n", .{}); // Placeholder, remove this line when implementing the scanner
     }
