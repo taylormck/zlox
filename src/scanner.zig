@@ -5,6 +5,8 @@ const TokenType = enum {
     // Single character tokens
     LEFT_PAREN,
     RIGHT_PAREN,
+    LEFT_BRACE,
+    RIGHT_BRACE,
 
     // Double character tokens
     EOF,
@@ -23,6 +25,12 @@ const Lexeme = struct {
             },
             .RIGHT_PAREN => {
                 return "RIGHT_PAREN ) null\n";
+            },
+            .LEFT_BRACE => {
+                return "LEFT_BRACE { null\n";
+            },
+            .RIGHT_BRACE => {
+                return "RIGHT_BRACE } null\n";
             },
             .EOF => {
                 return "EOF  null\n";
@@ -46,6 +54,12 @@ pub fn scan(input: []u8) !std.ArrayList(Lexeme) {
             },
             ')' => {
                 try result.append(Lexeme{ .type = .RIGHT_PAREN });
+            },
+            '{' => {
+                try result.append(Lexeme{ .type = .LEFT_BRACE });
+            },
+            '}' => {
+                try result.append(Lexeme{ .type = .RIGHT_BRACE });
             },
             ' ', '\t' => {
                 // no-op
