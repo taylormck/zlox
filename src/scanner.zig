@@ -265,6 +265,7 @@ pub fn scan(input: []u8) !ScannerResults {
                         while (current < input.len and input[current] != 10) {
                             current += 1;
                         }
+                        current_line += 1;
                     },
                     else => {
                         try result.append(Lexeme{ .type = .SLASH });
