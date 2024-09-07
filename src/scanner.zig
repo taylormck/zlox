@@ -152,6 +152,10 @@ pub fn scan(input: []u8) !ScannerResults {
                 current_line += 1;
             },
             '=' => {
+                if (current + 1 >= input.len) {
+                    try result.append(Lexeme{ .type = .EQUAL });
+                }
+
                 switch (input[current + 1]) {
                     '=' => {
                         try result.append(Lexeme{ .type = .EQUAL_EQUAL });
