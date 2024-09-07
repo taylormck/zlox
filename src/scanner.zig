@@ -28,7 +28,7 @@ const ScannerError = struct {
                 try writer.print("[line {d}] Error: Unexpected character: {s}", .{ self.line, self.token });
             },
             .UNTERMINATED_STRING => {
-                try writer.print("[line {d}] Error: Unterminated string", .{self.line});
+                try writer.print("[line {d}] Error: Unterminated string.", .{self.line});
             },
         }
     }
@@ -181,7 +181,6 @@ pub fn scan(input: []u8) !ScannerResults {
                 while (current < input.len) {
                     const current_char = input[current];
                     try string_content.append(current_char);
-                    current += 1;
 
                     // NOTE: Increment the new line in the string
                     if (current_char == 10) {
@@ -191,6 +190,8 @@ pub fn scan(input: []u8) !ScannerResults {
                     if (current_char == '"') {
                         break;
                     }
+
+                    current += 1;
                 }
 
                 if (current >= input.len) {
