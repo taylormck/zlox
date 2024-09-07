@@ -11,6 +11,7 @@ const ScannerResults = Tuple(&.{
 
 const ScannerErrorType = enum {
     UNEXPECTED_CHARACTER,
+    UNTERMINATED_STRING,
 };
 
 const ScannerError = struct {
@@ -25,6 +26,9 @@ const ScannerError = struct {
         switch (self.type) {
             .UNEXPECTED_CHARACTER => {
                 try writer.print("[line {d}] Error: Unexpected character: {s}", .{ self.line, self.token });
+            },
+            .UNTERMINATED_STRING => {
+                try writer.print("[line {d}] Error: Unterminated string", .{self.line});
             },
         }
     }
@@ -168,6 +172,7 @@ pub fn scan(input: []u8) !ScannerResults {
                 }
             },
             '"' => {
+                const starting_line = current_line;
                 var string_content = ArrayList(u8).init(std.heap.page_allocator);
 
                 try string_content.append('"');
@@ -178,13 +183,22 @@ pub fn scan(input: []u8) !ScannerResults {
                     try string_content.append(current_char);
                     current += 1;
 
+                    // NOTE: Increment the new line in the string
+                    if (current_char == 10) {
+                        current_line += 1;
+                    }
+
                     if (current_char == '"') {
                         break;
                     }
                 }
 
                 if (current >= input.len) {
-                    // TODO: append error
+                    try errors.append(ScannerError{
+                        .line = starting_line,
+                        .type = .UNTERMINATED_STRING,
+                        .token = "",
+                    });
                     break;
                 }
 
