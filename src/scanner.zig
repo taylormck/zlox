@@ -2,116 +2,12 @@ const std = @import("std");
 const ArrayList = std.ArrayList;
 const Tuple = std.meta.Tuple;
 
+const lexeme = @import("lexeme.zig");
+
 const ScannerResults = Tuple(&.{
-    ArrayList(Lexeme),
+    ArrayList(lexeme.Lexeme),
     ArrayList(ScannerError),
 });
-
-const TokenType = enum {
-    // Single character tokens
-    LEFT_PAREN,
-    RIGHT_PAREN,
-    LEFT_BRACE,
-    RIGHT_BRACE,
-    COMMA,
-    DOT,
-    MINUS,
-    PLUS,
-    SEMICOLON,
-    STAR,
-
-    // Potentially double character tokens
-    EQUAL_EQUAL,
-    EQUAL,
-    BANG_EQUAL,
-    BANG,
-    GREATER_EQUAL,
-    GREATER,
-    LESS_EQUAL,
-    LESS,
-    SLASH,
-
-    // Double character tokens
-    // NEW_LINE,
-    EOF,
-};
-
-const Lexeme = struct {
-    type: TokenType,
-    // TODO: add additional info, such as line number
-    // or column number
-
-    pub fn format(self: *const @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-
-        switch (self.type) {
-            .LEFT_PAREN => {
-                try writer.writeAll("LEFT_PAREN ( null");
-            },
-            .RIGHT_PAREN => {
-                try writer.writeAll("RIGHT_PAREN ) null");
-            },
-            .LEFT_BRACE => {
-                try writer.writeAll("LEFT_BRACE { null");
-            },
-            .RIGHT_BRACE => {
-                try writer.writeAll("RIGHT_BRACE } null");
-            },
-            .COMMA => {
-                try writer.writeAll("COMMA , null");
-            },
-            .DOT => {
-                try writer.writeAll("DOT . null");
-            },
-            .MINUS => {
-                try writer.writeAll("MINUS - null");
-            },
-            .PLUS => {
-                try writer.writeAll("PLUS + null");
-            },
-            .SEMICOLON => {
-                try writer.writeAll("SEMICOLON ; null");
-            },
-            .STAR => {
-                try writer.writeAll("STAR * null");
-            },
-            .EQUAL_EQUAL => {
-                try writer.writeAll("EQUAL_EQUAL == null");
-            },
-            .EQUAL => {
-                try writer.writeAll("EQUAL = null");
-            },
-            .BANG_EQUAL => {
-                try writer.writeAll("BANG_EQUAL != null");
-            },
-            .BANG => {
-                try writer.writeAll("BANG ! null");
-            },
-            .GREATER_EQUAL => {
-                try writer.writeAll("GREATER_EQUAL >= null");
-            },
-            .GREATER => {
-                try writer.writeAll("GREATER > null");
-            },
-            .LESS_EQUAL => {
-                try writer.writeAll("LESS_EQUAL <= null");
-            },
-            .LESS => {
-                try writer.writeAll("LESS < null");
-            },
-            .SLASH => {
-                try writer.writeAll("SLASH / null");
-            },
-            // .NEW_LINE => {
-            //     // try writer.writeAll("NEW_LINE null");
-            // },
-            .EOF => {
-                try writer.writeAll("EOF  null");
-            },
-        }
-    }
-};
 
 const ScannerErrorType = enum {
     UNEXPECTED_CHARACTER,
@@ -138,63 +34,62 @@ pub fn scan(input: []u8) !ScannerResults {
     var current: usize = 0;
     var current_line: usize = 1;
 
-    var result = ArrayList(Lexeme).init(std.heap.page_allocator);
+    var result = ArrayList(lexeme.Lexeme).init(std.heap.page_allocator);
     var errors = ArrayList(ScannerError).init(std.heap.page_allocator);
 
     while (current < input.len) {
         switch (input[current]) {
             // NOTE: 9 is a horizontal tab
             ' ', 9 => {},
+            // NOTE: 10 a line feed character
+            10 => {
+                current_line += 1;
+            },
             '(' => {
-                try result.append(Lexeme{ .type = .LEFT_PAREN });
+                try result.append(lexeme.LeftParen);
             },
             ')' => {
-                try result.append(Lexeme{ .type = .RIGHT_PAREN });
+                try result.append(lexeme.RightParen);
             },
             '{' => {
-                try result.append(Lexeme{ .type = .LEFT_BRACE });
+                try result.append(lexeme.LeftBrace);
             },
             '}' => {
-                try result.append(Lexeme{ .type = .RIGHT_BRACE });
+                try result.append(lexeme.RightBrace);
             },
             ',' => {
-                try result.append(Lexeme{ .type = .COMMA });
+                try result.append(lexeme.Comma);
             },
             '.' => {
-                try result.append(Lexeme{ .type = .DOT });
+                try result.append(lexeme.Dot);
             },
             '-' => {
-                try result.append(Lexeme{ .type = .MINUS });
+                try result.append(lexeme.Minus);
             },
             '+' => {
-                try result.append(Lexeme{ .type = .PLUS });
+                try result.append(lexeme.Plus);
             },
             ';' => {
-                try result.append(Lexeme{ .type = .SEMICOLON });
+                try result.append(lexeme.Semicolon);
             },
             '*' => {
-                try result.append(Lexeme{ .type = .STAR });
-            },
-            // This is the magic number for a line feed character
-            10 => {
-                // try result.append(Lexeme{ .type = .NEW_LINE });
-                current_line += 1;
+                try result.append(lexeme.Star);
             },
             '=' => {
                 const look_ahead_index = current + 1;
 
                 if (look_ahead_index >= input.len) {
-                    try result.append(Lexeme{ .type = .EQUAL });
+                    try result.append(lexeme.Equal);
                     break;
                 }
 
                 switch (input[look_ahead_index]) {
                     '=' => {
-                        try result.append(Lexeme{ .type = .EQUAL_EQUAL });
+                        try result.append(lexeme.EqualEqual);
                         current += 1;
                     },
                     else => {
-                        try result.append(Lexeme{ .type = .EQUAL });
+                        try result.append(lexeme.Equal);
                     },
                 }
             },
@@ -202,17 +97,17 @@ pub fn scan(input: []u8) !ScannerResults {
                 const look_ahead_index = current + 1;
 
                 if (look_ahead_index >= input.len) {
-                    try result.append(Lexeme{ .type = .BANG });
+                    try result.append(lexeme.Bang);
                     break;
                 }
 
                 switch (input[look_ahead_index]) {
                     '=' => {
-                        try result.append(Lexeme{ .type = .BANG_EQUAL });
+                        try result.append(lexeme.BangEqual);
                         current += 1;
                     },
                     else => {
-                        try result.append(Lexeme{ .type = .BANG });
+                        try result.append(lexeme.Bang);
                     },
                 }
             },
@@ -220,17 +115,17 @@ pub fn scan(input: []u8) !ScannerResults {
                 const look_ahead_index = current + 1;
 
                 if (look_ahead_index >= input.len) {
-                    try result.append(Lexeme{ .type = .LESS });
+                    try result.append(lexeme.Less);
                     break;
                 }
 
                 switch (input[look_ahead_index]) {
                     '=' => {
-                        try result.append(Lexeme{ .type = .LESS_EQUAL });
+                        try result.append(lexeme.LessEqual);
                         current += 1;
                     },
                     else => {
-                        try result.append(Lexeme{ .type = .LESS });
+                        try result.append(lexeme.Less);
                     },
                 }
             },
@@ -238,17 +133,17 @@ pub fn scan(input: []u8) !ScannerResults {
                 const look_ahead_index = current + 1;
 
                 if (look_ahead_index >= input.len) {
-                    try result.append(Lexeme{ .type = .GREATER });
+                    try result.append(lexeme.Greater);
                     break;
                 }
 
                 switch (input[look_ahead_index]) {
                     '=' => {
-                        try result.append(Lexeme{ .type = .GREATER_EQUAL });
+                        try result.append(lexeme.GreaterEqual);
                         current += 1;
                     },
                     else => {
-                        try result.append(Lexeme{ .type = .GREATER });
+                        try result.append(lexeme.Greater);
                     },
                 }
             },
@@ -256,7 +151,7 @@ pub fn scan(input: []u8) !ScannerResults {
                 const look_ahead_index = current + 1;
 
                 if (look_ahead_index >= input.len) {
-                    try result.append(Lexeme{ .type = .SLASH });
+                    try result.append(lexeme.Slash);
                     break;
                 }
 
@@ -268,9 +163,38 @@ pub fn scan(input: []u8) !ScannerResults {
                         current_line += 1;
                     },
                     else => {
-                        try result.append(Lexeme{ .type = .SLASH });
+                        try result.append(lexeme.Slash);
                     },
                 }
+            },
+            '"' => {
+                var string_content = ArrayList(u8).init(std.heap.page_allocator);
+
+                try string_content.append('"');
+                current += 1;
+
+                while (current < input.len) {
+                    const current_char = input[current];
+                    try string_content.append(current_char);
+                    current += 1;
+
+                    if (current_char == '"') {
+                        break;
+                    }
+                }
+
+                if (current >= input.len) {
+                    // TODO: append error
+                    break;
+                }
+
+                const new_lexeme = lexeme.Lexeme{
+                    .type = .STRING,
+                    .lexeme = string_content.items,
+                    .literal = string_content.items[1 .. string_content.items.len - 1],
+                };
+
+                try result.append(new_lexeme);
             },
             else => {
                 try errors.append(ScannerError{
@@ -285,7 +209,7 @@ pub fn scan(input: []u8) !ScannerResults {
     }
 
     // Always add an EOF token to the end
-    try result.append(Lexeme{ .type = .EOF });
+    try result.append(lexeme.EndOfFile);
 
     return ScannerResults{ result, errors };
 }
