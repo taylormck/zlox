@@ -152,11 +152,14 @@ pub fn scan(input: []u8) !ScannerResults {
                 current_line += 1;
             },
             '=' => {
-                if (current + 1 >= input.len) {
+                const look_ahead_index = current + 1;
+
+                if (look_ahead_index >= input.len) {
                     try result.append(Lexeme{ .type = .EQUAL });
+                    break;
                 }
 
-                switch (input[current + 1]) {
+                switch (input[look_ahead_index]) {
                     '=' => {
                         try result.append(Lexeme{ .type = .EQUAL_EQUAL });
                         current += 1;
