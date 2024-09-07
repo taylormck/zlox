@@ -250,6 +250,11 @@ pub fn scan(input: []u8) !ScannerResults {
                     try number_literal.append('0');
                 }
 
+                // NOTE: due to the look-ahead nature of the algorithm we use here,
+                // we need to set the cursor back so that we don't accidentally
+                // consume the first non-number character.
+                current -= 1;
+
                 const new_lexeme = lexeme.Lexeme{
                     .type = .NUMBER,
                     .lexeme = number_content.items,
