@@ -25,6 +25,10 @@ const TokenType = enum {
     EQUAL,
     BANG_EQUAL,
     BANG,
+    GREATER_EQUAL,
+    GREATER,
+    LESS_EQUAL,
+    LESS,
 
     // Double character tokens
     NEW_LINE,
@@ -82,6 +86,18 @@ const Lexeme = struct {
             },
             .BANG => {
                 try writer.writeAll("BANG ! null");
+            },
+            .GREATER_EQUAL => {
+                try writer.writeAll("GREATER_EQUAL >= null");
+            },
+            .GREATER => {
+                try writer.writeAll("GREATER > null");
+            },
+            .LESS_EQUAL => {
+                try writer.writeAll("LESS_EQUAL <= null");
+            },
+            .LESS => {
+                try writer.writeAll("LESS < null");
             },
             .NEW_LINE => {
                 try writer.writeAll("NEW_LINE null");
@@ -192,6 +208,42 @@ pub fn scan(input: []u8) !ScannerResults {
                     },
                     else => {
                         try result.append(Lexeme{ .type = .BANG });
+                    },
+                }
+            },
+            '<' => {
+                const look_ahead_index = current + 1;
+
+                if (look_ahead_index >= input.len) {
+                    try result.append(Lexeme{ .type = .LESS });
+                    break;
+                }
+
+                switch (input[look_ahead_index]) {
+                    '=' => {
+                        try result.append(Lexeme{ .type = .LESS_EQUAL });
+                        current += 1;
+                    },
+                    else => {
+                        try result.append(Lexeme{ .type = .LESS });
+                    },
+                }
+            },
+            '>' => {
+                const look_ahead_index = current + 1;
+
+                if (look_ahead_index >= input.len) {
+                    try result.append(Lexeme{ .type = .GREATER });
+                    break;
+                }
+
+                switch (input[look_ahead_index]) {
+                    '=' => {
+                        try result.append(Lexeme{ .type = .GREATER_EQUAL });
+                        current += 1;
+                    },
+                    else => {
+                        try result.append(Lexeme{ .type = .GREATER });
                     },
                 }
             },
