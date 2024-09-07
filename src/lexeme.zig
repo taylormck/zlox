@@ -1,5 +1,20 @@
 const std = @import("std");
 const ArrayList = std.ArrayList;
+const StaticStringMap = std.StaticStringMap;
+const KeywordMap = StaticStringMap(Lexeme);
+
+pub const Lexeme = struct {
+    type: TokenType,
+    lexeme: []const u8,
+    literal: []const u8,
+
+    pub fn format(self: *const @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+
+        try writer.print("{s} {s} {s}", .{ @tagName(self.type), self.lexeme, self.literal });
+    }
+};
 
 pub const TokenType = enum {
     // Single character tokens
@@ -32,20 +47,44 @@ pub const TokenType = enum {
     STRING,
     NUMBER,
     IDENTIFIER,
+
+    // Reserved words
+    AND,
+    CLASS,
+    ELSE,
+    FALSE,
+    FOR,
+    FUN,
+    IF,
+    NIL,
+    OR,
+    PRINT,
+    RETURN,
+    SUPER,
+    THIS,
+    TRUE,
+    VAR,
+    WHILE,
 };
 
-pub const Lexeme = struct {
-    type: TokenType,
-    lexeme: []const u8,
-    literal: []const u8,
-
-    pub fn format(self: *const @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-
-        try writer.print("{s} {s} {s}", .{ @tagName(self.type), self.lexeme, self.literal });
-    }
-};
+pub const keywords = KeywordMap.initComptime(&.{
+    .{ "and", And },
+    .{ "class", Class },
+    .{ "else", Else },
+    .{ "false", False },
+    .{ "for", For },
+    .{ "fun", Fun },
+    .{ "if", If },
+    .{ "nil", Nil },
+    .{ "or", Or },
+    .{ "print", Print },
+    .{ "return", Return },
+    .{ "super", Super },
+    .{ "this", This },
+    .{ "true", True },
+    .{ "var", Var },
+    .{ "while", While },
+});
 
 pub const LeftParen = Lexeme{
     .type = .LEFT_PAREN,
@@ -162,3 +201,99 @@ pub const Slash = Lexeme{
 };
 
 pub const EndOfFile = Lexeme{ .type = .EOF, .lexeme = "", .literal = "null" };
+
+pub const And = Lexeme{
+    .type = .AND,
+    .lexeme = "and",
+    .literal = "null",
+};
+
+pub const Class = Lexeme{
+    .type = .CLASS,
+    .lexeme = "class",
+    .literal = "null",
+};
+
+pub const Else = Lexeme{
+    .type = .ELSE,
+    .lexeme = "else",
+    .literal = "null",
+};
+
+pub const False = Lexeme{
+    .type = .FALSE,
+    .lexeme = "false",
+    .literal = "null",
+};
+
+pub const For = Lexeme{
+    .type = .FOR,
+    .lexeme = "for",
+    .literal = "null",
+};
+
+pub const Fun = Lexeme{
+    .type = .FUN,
+    .lexeme = "fun",
+    .literal = "null",
+};
+
+pub const If = Lexeme{
+    .type = .IF,
+    .lexeme = "if",
+    .literal = "null",
+};
+
+pub const Nil = Lexeme{
+    .type = .NIL,
+    .lexeme = "nil",
+    .literal = "null",
+};
+
+pub const Or = Lexeme{
+    .type = .OR,
+    .lexeme = "or",
+    .literal = "null",
+};
+
+pub const Print = Lexeme{
+    .type = .PRINT,
+    .lexeme = "print",
+    .literal = "null",
+};
+
+pub const Return = Lexeme{
+    .type = .RETURN,
+    .lexeme = "return",
+    .literal = "null",
+};
+
+pub const Super = Lexeme{
+    .type = .SUPER,
+    .lexeme = "super",
+    .literal = "null",
+};
+
+pub const This = Lexeme{
+    .type = .THIS,
+    .lexeme = "this",
+    .literal = "null",
+};
+
+pub const True = Lexeme{
+    .type = .TRUE,
+    .lexeme = "true",
+    .literal = "null",
+};
+
+pub const Var = Lexeme{
+    .type = .VAR,
+    .lexeme = "var",
+    .literal = "null",
+};
+
+pub const While = Lexeme{
+    .type = .WHILE,
+    .lexeme = "while",
+    .literal = "null",
+};

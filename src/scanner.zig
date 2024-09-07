@@ -281,13 +281,17 @@ pub fn scan(input: []u8) !ScannerResults {
                 // consume the first non-number character.
                 current -= 1;
 
-                const new_lexeme = lexeme.Lexeme{
-                    .type = .IDENTIFIER,
-                    .lexeme = identifier_content.items,
-                    .literal = "null",
-                };
+                if (lexeme.keywords.has(identifier_content.items)) {
+                    try result.append(lexeme.keywords.get(identifier_content.items).?);
+                } else {
+                    const new_lexeme = lexeme.Lexeme{
+                        .type = .IDENTIFIER,
+                        .lexeme = identifier_content.items,
+                        .literal = "null",
+                    };
 
-                try result.append(new_lexeme);
+                    try result.append(new_lexeme);
+                }
             },
             else => {
                 try errors.append(ScannerError{
