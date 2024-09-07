@@ -32,7 +32,7 @@ const TokenType = enum {
     SLASH,
 
     // Double character tokens
-    NEW_LINE,
+    // NEW_LINE,
     EOF,
 };
 
@@ -103,9 +103,9 @@ const Lexeme = struct {
             .SLASH => {
                 try writer.writeAll("SLASH / null");
             },
-            .NEW_LINE => {
-                try writer.writeAll("NEW_LINE null");
-            },
+            // .NEW_LINE => {
+            //     // try writer.writeAll("NEW_LINE null");
+            // },
             .EOF => {
                 try writer.writeAll("EOF  null");
             },
@@ -143,7 +143,8 @@ pub fn scan(input: []u8) !ScannerResults {
 
     while (current < input.len) {
         switch (input[current]) {
-            ' ', '\t' => {},
+            // NOTE: 9 is a horizontal tab
+            ' ', 9 => {},
             '(' => {
                 try result.append(Lexeme{ .type = .LEFT_PAREN });
             },
@@ -176,7 +177,7 @@ pub fn scan(input: []u8) !ScannerResults {
             },
             // This is the magic number for a line feed character
             10 => {
-                try result.append(Lexeme{ .type = .NEW_LINE });
+                // try result.append(Lexeme{ .type = .NEW_LINE });
                 current_line += 1;
             },
             '=' => {
