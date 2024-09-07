@@ -23,6 +23,8 @@ const TokenType = enum {
     // Potentially double character tokens
     EQUAL_EQUAL,
     EQUAL,
+    BANG_EQUAL,
+    BANG,
 
     // Double character tokens
     NEW_LINE,
@@ -74,6 +76,12 @@ const Lexeme = struct {
             },
             .EQUAL => {
                 try writer.writeAll("EQUAL = null");
+            },
+            .BANG_EQUAL => {
+                try writer.writeAll("BANG_EQUAL != null");
+            },
+            .BANG => {
+                try writer.writeAll("BANG ! null");
             },
             .NEW_LINE => {
                 try writer.writeAll("NEW_LINE null");
@@ -166,6 +174,24 @@ pub fn scan(input: []u8) !ScannerResults {
                     },
                     else => {
                         try result.append(Lexeme{ .type = .EQUAL });
+                    },
+                }
+            },
+            '!' => {
+                const look_ahead_index = current + 1;
+
+                if (look_ahead_index >= input.len) {
+                    try result.append(Lexeme{ .type = .BANG });
+                    break;
+                }
+
+                switch (input[look_ahead_index]) {
+                    '=' => {
+                        try result.append(Lexeme{ .type = .BANG_EQUAL });
+                        current += 1;
+                    },
+                    else => {
+                        try result.append(Lexeme{ .type = .BANG });
                     },
                 }
             },
