@@ -29,6 +29,7 @@ const TokenType = enum {
     GREATER,
     LESS_EQUAL,
     LESS,
+    SLASH,
 
     // Double character tokens
     NEW_LINE,
@@ -98,6 +99,9 @@ const Lexeme = struct {
             },
             .LESS => {
                 try writer.writeAll("LESS < null");
+            },
+            .SLASH => {
+                try writer.writeAll("SLASH / null");
             },
             .NEW_LINE => {
                 try writer.writeAll("NEW_LINE null");
@@ -247,20 +251,22 @@ pub fn scan(input: []u8) !ScannerResults {
                     },
                 }
             },
-            '\\' => {
-                current += 1;
-                switch (input[current]) {
-                    'n', 'r' => {
-                        try result.append(Lexeme{ .type = .NEW_LINE });
-                        current_line += 1;
-                    },
-                    '0' => {
-                        // We don't add the token here, because we add it
-                        // after the loop.
-                        break;
+            '/' => {
+                const look_ahead_index = current + 1;
+
+                if (look_ahead_index >= input.len) {
+                    try result.append(Lexeme{ .type = .SLASH });
+                    break;
+                }
+
+                switch (input[look_ahead_index]) {
+                    '/' => {
+                        while (current < input.len and input[current] != 10) {
+                            current += 1;
+                        }
                     },
                     else => {
-                        // TODO: print an error
+                        try result.append(Lexeme{ .type = .SLASH });
                     },
                 }
             },
