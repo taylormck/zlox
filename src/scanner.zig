@@ -245,6 +245,11 @@ pub fn scan(input: []u8) !ScannerResults {
                     try number_literal.append('.');
                 }
 
+                // Pop off remaining zeroes.
+                while (number_literal.items[number_literal.items.len - 1] == '0') {
+                    _ = number_literal.pop();
+                }
+
                 // If there were no remaining digits, add a zero.
                 if (number_literal.items[number_literal.items.len - 1] == '.') {
                     try number_literal.append('0');
