@@ -250,7 +250,7 @@ pub fn scan(input: []u8) !ScannerResults {
                     try number_literal.append('0');
                 }
 
-                // NOTE: due to the look-ahead nature of the algorithm we use here,
+                // Due to the look-ahead nature of the algorithm we use here,
                 // we need to set the cursor back so that we don't accidentally
                 // consume the first non-number character.
                 current -= 1;
@@ -259,6 +259,27 @@ pub fn scan(input: []u8) !ScannerResults {
                     .type = .NUMBER,
                     .lexeme = number_content.items,
                     .literal = number_literal.items,
+                };
+
+                try result.append(new_lexeme);
+            },
+            'a'...'z', 'A'...'Z', '_' => {
+                var identifier_content = ArrayList(u8).init(std.heap.page_allocator);
+
+                while (current < input.len and is_valid_identifier_char(input[current])) {
+                    try identifier_content.append(input[current]);
+                    current += 1;
+                }
+
+                // Due to the look-ahead nature of the algorithm we use here,
+                // we need to set the cursor back so that we don't accidentally
+                // consume the first non-number character.
+                current -= 1;
+
+                const new_lexeme = lexeme.Lexeme{
+                    .type = .IDENTIFIER,
+                    .lexeme = identifier_content.items,
+                    .literal = "null",
                 };
 
                 try result.append(new_lexeme);
@@ -283,4 +304,12 @@ pub fn scan(input: []u8) !ScannerResults {
 
 fn is_numeric(c: u8) bool {
     return c >= '0' and c <= '9';
+}
+
+fn is_alphabetic(c: u8) bool {
+    return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z');
+}
+
+fn is_valid_identifier_char(c: u8) bool {
+    return is_alphabetic(c) or is_numeric(c) or c == '_';
 }

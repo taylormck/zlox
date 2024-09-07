@@ -31,6 +31,7 @@ pub const TokenType = enum {
     // Multi-character tokens
     STRING,
     NUMBER,
+    IDENTIFIER,
 };
 
 pub const Lexeme = struct {
