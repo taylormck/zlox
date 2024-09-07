@@ -20,6 +20,10 @@ const TokenType = enum {
     SEMICOLON,
     STAR,
 
+    // Potentially double character tokens
+    EQUAL_EQUAL,
+    EQUAL,
+
     // Double character tokens
     NEW_LINE,
     EOF,
@@ -65,6 +69,12 @@ const Lexeme = struct {
             .STAR => {
                 try writer.writeAll("STAR * null");
             },
+            .EQUAL_EQUAL => {
+                try writer.writeAll("EQUAL_EQUAL == null");
+            },
+            .EQUAL => {
+                try writer.writeAll("EQUAL = null");
+            },
             .NEW_LINE => {
                 try writer.writeAll("NEW_LINE null");
             },
@@ -105,6 +115,7 @@ pub fn scan(input: []u8) !ScannerResults {
 
     while (current < input.len) {
         switch (input[current]) {
+            ' ', '\t' => {},
             '(' => {
                 try result.append(Lexeme{ .type = .LEFT_PAREN });
             },
@@ -135,14 +146,21 @@ pub fn scan(input: []u8) !ScannerResults {
             '*' => {
                 try result.append(Lexeme{ .type = .STAR });
             },
-            ' ', '\t' => {
-                // NOTE: We intentionally ignore whitespace
-                // no-op
-            },
             // This is the magic number for a line feed character
             10 => {
                 try result.append(Lexeme{ .type = .NEW_LINE });
                 current_line += 1;
+            },
+            '=' => {
+                switch (input[current + 1]) {
+                    '=' => {
+                        try result.append(Lexeme{ .type = .EQUAL_EQUAL });
+                        current += 1;
+                    },
+                    else => {
+                        try result.append(Lexeme{ .type = .EQUAL });
+                    },
+                }
             },
             '\\' => {
                 current += 1;
