@@ -22,7 +22,13 @@ const Literal = union(enum) {
         switch (self) {
             .nil, .super, .this => try writer.print("{s}", .{@tagName(self)}),
             .bool => |val| try writer.print("{}", .{val}),
-            .number => |val| try writer.print("{d}", .{val}),
+            .number => |val| {
+                if (@mod(val, 1) == 0) {
+                    try writer.print("{d}.0", .{val});
+                } else {
+                    try writer.print("{d}", .{val});
+                }
+            },
             .identifier, .string => |val| try writer.print("{s}", .{val}),
             else => {},
         }
@@ -79,7 +85,6 @@ pub fn parse_expression(stream: *TokenStream) !?Expression {
 
             while (!stream.at_end()) {
                 const next_token = try stream.peek();
-                try std.io.getStdErr().writer().print("next token: {s}\n", .{next_token});
 
                 switch (next_token.type) {
                     .RIGHT_PAREN => {
