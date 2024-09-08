@@ -49,23 +49,23 @@ pub fn tokenize(filename: []const u8, print: bool) ![]Token {
 
     const results = try scanner.scan(file_contents);
 
-    const errors = results[1];
-    for (errors.items) |err| {
+    const errors = results.errors;
+    for (errors) |err| {
         try std.io.getStdErr().writer().print("{s}\n", .{err});
     }
 
-    const tokens = results[0];
+    const tokens = results.tokens;
     if (print) {
-        for (tokens.items) |token| {
+        for (tokens) |token| {
             try std.io.getStdOut().writer().print("{s}\n", .{token});
         }
     }
 
-    if (errors.items.len > 0) {
+    if (errors.len > 0) {
         std.process.exit(65);
     }
 
-    return tokens.items;
+    return tokens;
 }
 
 pub fn parse(filename: []const u8) !void {
@@ -77,3 +77,5 @@ pub fn parse(filename: []const u8) !void {
         try std.io.getStdOut().writer().print("{s}\n", .{expressions});
     }
 }
+
+test {}

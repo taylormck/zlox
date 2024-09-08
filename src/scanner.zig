@@ -6,34 +6,9 @@ const ByteStream = @import("stream.zig").ByteStream;
 
 const token = @import("token.zig");
 
-const ScannerResults = Tuple(&.{
-    ArrayList(token.Token),
-    ArrayList(ScannerError),
-});
-
-const ScannerErrorType = enum {
-    UNEXPECTED_CHARACTER,
-    UNTERMINATED_STRING,
-};
-
-const ScannerError = struct {
-    line: usize,
-    type: ScannerErrorType,
-    token: []const u8,
-
-    pub fn format(self: *const @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-
-        switch (self.type) {
-            .UNEXPECTED_CHARACTER => {
-                try writer.print("[line {d}] Error: Unexpected character: {s}", .{ self.line, self.token });
-            },
-            .UNTERMINATED_STRING => {
-                try writer.print("[line {d}] Error: Unterminated string.", .{self.line});
-            },
-        }
-    }
+const ScannerResults = struct {
+    tokens: []token.Token,
+    errors: []ScannerError,
 };
 
 pub fn scan(input: []u8) !ScannerResults {
@@ -41,10 +16,10 @@ pub fn scan(input: []u8) !ScannerResults {
 
     var current_line: usize = 1;
 
-    var result = ArrayList(token.Token).init(std.heap.page_allocator);
+    var tokens = ArrayList(token.Token).init(std.heap.page_allocator);
     var errors = ArrayList(ScannerError).init(std.heap.page_allocator);
 
-    while (!stream.at_end()) scan_char_loop: {
+    while (!stream.at_end()) {
         const current_byte = try stream.next();
 
         switch (current_byte) {
@@ -54,26 +29,26 @@ pub fn scan(input: []u8) !ScannerResults {
             10 => {
                 current_line += 1;
             },
-            '(' => try result.append(token.LeftParen),
-            ')' => try result.append(token.RightParen),
-            '{' => try result.append(token.LeftBrace),
-            '}' => try result.append(token.RightBrace),
-            ',' => try result.append(token.Comma),
-            '.' => try result.append(token.Dot),
-            '-' => try result.append(token.Minus),
-            '+' => try result.append(token.Plus),
-            ';' => try result.append(token.Semicolon),
-            '*' => try result.append(token.Star),
-            '=' => try process_or_equal(token.Equal, token.EqualEqual, &stream, &result),
-            '!' => try process_or_equal(token.Bang, token.BangEqual, &stream, &result),
-            '<' => try process_or_equal(token.Less, token.LessEqual, &stream, &result),
-            '>' => try process_or_equal(token.Greater, token.GreaterEqual, &stream, &result),
+            '(' => try tokens.append(token.LeftParen),
+            ')' => try tokens.append(token.RightParen),
+            '{' => try tokens.append(token.LeftBrace),
+            '}' => try tokens.append(token.RightBrace),
+            ',' => try tokens.append(token.Comma),
+            '.' => try tokens.append(token.Dot),
+            '-' => try tokens.append(token.Minus),
+            '+' => try tokens.append(token.Plus),
+            ';' => try tokens.append(token.Semicolon),
+            '*' => try tokens.append(token.Star),
+            '=' => try process_or_equal(token.Equal, token.EqualEqual, &stream, &tokens),
+            '!' => try process_or_equal(token.Bang, token.BangEqual, &stream, &tokens),
+            '<' => try process_or_equal(token.Less, token.LessEqual, &stream, &tokens),
+            '>' => try process_or_equal(token.Greater, token.GreaterEqual, &stream, &tokens),
             '/' => {
                 if (!stream.at_end() and try stream.peek() == '/') {
                     while (try stream.next() != 10 and !stream.at_end()) {}
                     current_line += 1;
                 } else {
-                    try result.append(token.Slash);
+                    try tokens.append(token.Slash);
                 }
             },
             '"' => {
@@ -81,29 +56,25 @@ pub fn scan(input: []u8) !ScannerResults {
                 var string_content = ArrayList(u8).init(std.heap.page_allocator);
                 try string_content.append('"');
 
-                while (!stream.at_end()) {
+                while (true) {
                     const current_char = try stream.next();
                     try string_content.append(current_char);
 
                     // NOTE: Increment the new line in the string
                     if (current_char == 10) {
                         current_line += 1;
-                    }
-
-                    if (current_char == '"') {
+                    } else if (current_char == '"') {
                         break;
                     }
-                }
 
-                if (stream.at_end() and
-                    string_content.items[string_content.items.len - 1] != '"')
-                {
-                    try errors.append(ScannerError{
-                        .line = starting_line,
-                        .type = .UNTERMINATED_STRING,
-                        .token = "",
-                    });
-                    break :scan_char_loop;
+                    if (stream.at_end()) {
+                        try errors.append(ScannerError{
+                            .line = starting_line,
+                            .type = .UNTERMINATED_STRING,
+                            .token = "",
+                        });
+                        break;
+                    }
                 }
 
                 const new_lexeme = token.Token{
@@ -112,7 +83,7 @@ pub fn scan(input: []u8) !ScannerResults {
                     .literal = string_content.items[1 .. string_content.items.len - 1],
                 };
 
-                try result.append(new_lexeme);
+                try tokens.append(new_lexeme);
             },
             '0'...'9' => {
                 var number_content = ArrayList(u8).init(std.heap.page_allocator);
@@ -163,7 +134,7 @@ pub fn scan(input: []u8) !ScannerResults {
                     .literal = number_literal.items,
                 };
 
-                try result.append(new_lexeme);
+                try tokens.append(new_lexeme);
             },
             'a'...'z', 'A'...'Z', '_' => {
                 var identifier_content = ArrayList(u8).init(std.heap.page_allocator);
@@ -174,7 +145,7 @@ pub fn scan(input: []u8) !ScannerResults {
                 }
 
                 if (token.keywords.has(identifier_content.items)) {
-                    try result.append(token.keywords.get(identifier_content.items).?);
+                    try tokens.append(token.keywords.get(identifier_content.items).?);
                 } else {
                     const new_lexeme = token.Token{
                         .type = .IDENTIFIER,
@@ -182,7 +153,7 @@ pub fn scan(input: []u8) !ScannerResults {
                         .literal = "null",
                     };
 
-                    try result.append(new_lexeme);
+                    try tokens.append(new_lexeme);
                 }
             },
             else => {
@@ -196,9 +167,9 @@ pub fn scan(input: []u8) !ScannerResults {
     }
 
     // Always add an EOF token to the end
-    try result.append(token.EndOfFile);
+    try tokens.append(token.EndOfFile);
 
-    return ScannerResults{ result, errors };
+    return .{ .tokens = tokens.items, .errors = errors.items };
 }
 
 fn process_or_equal(base_token: token.Token, equal_token: token.Token, stream: *ByteStream, list: *ArrayList(token.Token)) !void {
@@ -221,3 +192,28 @@ fn is_alphabetic(c: u8) bool {
 fn is_valid_identifier_char(c: u8) bool {
     return is_alphabetic(c) or is_numeric(c) or c == '_';
 }
+
+const ScanErrorType = enum {
+    UNEXPECTED_CHARACTER,
+    UNTERMINATED_STRING,
+};
+
+const ScannerError = struct {
+    line: usize,
+    type: ScanErrorType,
+    token: []const u8,
+
+    pub fn format(self: *const @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+
+        switch (self.type) {
+            .UNEXPECTED_CHARACTER => {
+                try writer.print("[line {d}] Error: Unexpected character: {s}", .{ self.line, self.token });
+            },
+            .UNTERMINATED_STRING => {
+                try writer.print("[line {d}] Error: Unterminated string.", .{self.line});
+            },
+        }
+    }
+};
