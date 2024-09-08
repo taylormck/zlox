@@ -48,7 +48,7 @@ pub const Expression = union(enum) {
         switch (self) {
             .literal => |literal| try writer.print("{}", .{literal}),
             .grouping => |group| {
-                try writer.print("(", .{});
+                try writer.print("(group", .{});
 
                 for (group, 0..) |exp, i| {
                     try writer.print("{}", .{exp});
