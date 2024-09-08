@@ -44,7 +44,7 @@ pub fn scan(input: []u8) !ScannerResults {
     var result = ArrayList(token.Token).init(std.heap.page_allocator);
     var errors = ArrayList(ScannerError).init(std.heap.page_allocator);
 
-    while (!stream.at_end()) {
+    while (!stream.at_end()) scan_char_loop: {
         const current_byte = try stream.next();
 
         switch (current_byte) {
@@ -144,16 +144,7 @@ pub fn scan(input: []u8) !ScannerResults {
                 var string_content = ArrayList(u8).init(std.heap.page_allocator);
                 try string_content.append('"');
 
-                while (try stream.peek() != '"') {
-                    if (stream.at_end()) {
-                        try errors.append(ScannerError{
-                            .line = starting_line,
-                            .type = .UNTERMINATED_STRING,
-                            .token = "",
-                        });
-                        break;
-                    }
-
+                while (!stream.at_end()) {
                     const current_char = try stream.next();
                     try string_content.append(current_char);
 
@@ -161,9 +152,22 @@ pub fn scan(input: []u8) !ScannerResults {
                     if (current_char == 10) {
                         current_line += 1;
                     }
+
+                    if (current_char == '"') {
+                        break;
+                    }
                 }
-                try string_content.append('"');
-                try stream.advance();
+
+                if (stream.at_end() and
+                    string_content.items[string_content.items.len - 1] != '"')
+                {
+                    try errors.append(ScannerError{
+                        .line = starting_line,
+                        .type = .UNTERMINATED_STRING,
+                        .token = "",
+                    });
+                    break :scan_char_loop;
+                }
 
                 const new_lexeme = token.Token{
                     .type = .STRING,
