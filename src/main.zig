@@ -2,7 +2,7 @@ const std = @import("std");
 const Token = @import("token.zig").Token;
 
 const scanner = @import("scanner.zig");
-const expression = @import("expression.zig");
+const parser = @import("parser.zig");
 
 pub fn main() !void {
     const command = try parse_args();
@@ -71,7 +71,7 @@ pub fn tokenize(filename: []const u8, print: bool) ![]Token {
 pub fn parse(filename: []const u8) !void {
     const tokens = try tokenize(filename, false);
 
-    const optional_expressions = try expression.parse_tokens(tokens);
+    const optional_expressions = try parser.parse_tokens(tokens);
 
     if (optional_expressions) |expressions| {
         try std.io.getStdOut().writer().print("{s}\n", .{expressions});

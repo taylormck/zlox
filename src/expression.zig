@@ -21,7 +21,7 @@ const Terminal = union(enum) {
     }
 };
 
-const Expression = union(enum) {
+pub const Expression = union(enum) {
     terminal: Terminal,
     poop,
 
@@ -38,13 +38,7 @@ const Expression = union(enum) {
     }
 };
 
-pub fn parse_tokens(tokens: []const Token) !?Expression {
-    var stream = TokenStream.new(tokens);
-
-    return parse_token(&stream);
-}
-
-fn parse_token(stream: *TokenStream) !?Expression {
+pub fn parse_expression(stream: *TokenStream) !?Expression {
     const next = try stream.next();
 
     const lhs = switch (next.type) {
