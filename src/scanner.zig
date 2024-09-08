@@ -163,6 +163,7 @@ pub fn scan(input: []u8) !ScannerResults {
                     }
                 }
                 try string_content.append('"');
+                try stream.advance();
 
                 const new_lexeme = token.Token{
                     .type = .STRING,
