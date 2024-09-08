@@ -1,9 +1,9 @@
 const std = @import("std");
 const ArrayList = std.ArrayList;
 const StaticStringMap = std.StaticStringMap;
-const KeywordMap = StaticStringMap(Lexeme);
+const KeywordMap = StaticStringMap(Token);
 
-pub const Lexeme = struct {
+pub const Token = struct {
     type: TokenType,
     lexeme: []const u8,
     literal: []const u8,
@@ -86,213 +86,213 @@ pub const keywords = KeywordMap.initComptime(&.{
     .{ "while", While },
 });
 
-pub const LeftParen = Lexeme{
+pub const LeftParen = Token{
     .type = .LEFT_PAREN,
     .lexeme = "(",
     .literal = "null",
 };
 
-pub const RightParen = Lexeme{
+pub const RightParen = Token{
     .type = .RIGHT_PAREN,
     .lexeme = ")",
     .literal = "null",
 };
 
-pub const LeftBrace = Lexeme{
+pub const LeftBrace = Token{
     .type = .LEFT_BRACE,
     .lexeme = "{",
     .literal = "null",
 };
 
-pub const RightBrace = Lexeme{
+pub const RightBrace = Token{
     .type = .RIGHT_BRACE,
     .lexeme = "}",
     .literal = "null",
 };
 
-pub const Comma = Lexeme{
+pub const Comma = Token{
     .type = .COMMA,
     .lexeme = ",",
     .literal = "null",
 };
 
-pub const Dot = Lexeme{
+pub const Dot = Token{
     .type = .DOT,
     .lexeme = ".",
     .literal = "null",
 };
 
-pub const Minus = Lexeme{
+pub const Minus = Token{
     .type = .MINUS,
     .lexeme = "-",
     .literal = "null",
 };
 
-pub const Plus = Lexeme{
+pub const Plus = Token{
     .type = .PLUS,
     .lexeme = "+",
     .literal = "null",
 };
 
-pub const Semicolon = Lexeme{
+pub const Semicolon = Token{
     .type = .SEMICOLON,
     .lexeme = ";",
     .literal = "null",
 };
 
-pub const Star = Lexeme{
+pub const Star = Token{
     .type = .STAR,
     .lexeme = "*",
     .literal = "null",
 };
 
-pub const EqualEqual = Lexeme{
+pub const EqualEqual = Token{
     .type = .EQUAL_EQUAL,
     .lexeme = "==",
     .literal = "null",
 };
 
-pub const Equal = Lexeme{
+pub const Equal = Token{
     .type = .EQUAL,
     .lexeme = "=",
     .literal = "null",
 };
 
-pub const BangEqual = Lexeme{
+pub const BangEqual = Token{
     .type = .BANG_EQUAL,
     .lexeme = "!=",
     .literal = "null",
 };
 
-pub const Bang = Lexeme{
+pub const Bang = Token{
     .type = .BANG,
     .lexeme = "!",
     .literal = "null",
 };
 
-pub const GreaterEqual = Lexeme{
+pub const GreaterEqual = Token{
     .type = .GREATER_EQUAL,
     .lexeme = ">=",
     .literal = "null",
 };
 
-pub const Greater = Lexeme{
+pub const Greater = Token{
     .type = .GREATER,
     .lexeme = ">",
     .literal = "null",
 };
 
-pub const LessEqual = Lexeme{
+pub const LessEqual = Token{
     .type = .LESS_EQUAL,
     .lexeme = "<=",
     .literal = "null",
 };
 
-pub const Less = Lexeme{
+pub const Less = Token{
     .type = .LESS,
     .lexeme = "<",
     .literal = "null",
 };
 
-pub const Slash = Lexeme{
+pub const Slash = Token{
     .type = .SLASH,
     .lexeme = "/",
     .literal = "null",
 };
 
-pub const EndOfFile = Lexeme{ .type = .EOF, .lexeme = "", .literal = "null" };
+pub const EndOfFile = Token{ .type = .EOF, .lexeme = "", .literal = "null" };
 
-pub const And = Lexeme{
+pub const And = Token{
     .type = .AND,
     .lexeme = "and",
     .literal = "null",
 };
 
-pub const Class = Lexeme{
+pub const Class = Token{
     .type = .CLASS,
     .lexeme = "class",
     .literal = "null",
 };
 
-pub const Else = Lexeme{
+pub const Else = Token{
     .type = .ELSE,
     .lexeme = "else",
     .literal = "null",
 };
 
-pub const False = Lexeme{
+pub const False = Token{
     .type = .FALSE,
     .lexeme = "false",
     .literal = "null",
 };
 
-pub const For = Lexeme{
+pub const For = Token{
     .type = .FOR,
     .lexeme = "for",
     .literal = "null",
 };
 
-pub const Fun = Lexeme{
+pub const Fun = Token{
     .type = .FUN,
     .lexeme = "fun",
     .literal = "null",
 };
 
-pub const If = Lexeme{
+pub const If = Token{
     .type = .IF,
     .lexeme = "if",
     .literal = "null",
 };
 
-pub const Nil = Lexeme{
+pub const Nil = Token{
     .type = .NIL,
     .lexeme = "nil",
     .literal = "null",
 };
 
-pub const Or = Lexeme{
+pub const Or = Token{
     .type = .OR,
     .lexeme = "or",
     .literal = "null",
 };
 
-pub const Print = Lexeme{
+pub const Print = Token{
     .type = .PRINT,
     .lexeme = "print",
     .literal = "null",
 };
 
-pub const Return = Lexeme{
+pub const Return = Token{
     .type = .RETURN,
     .lexeme = "return",
     .literal = "null",
 };
 
-pub const Super = Lexeme{
+pub const Super = Token{
     .type = .SUPER,
     .lexeme = "super",
     .literal = "null",
 };
 
-pub const This = Lexeme{
+pub const This = Token{
     .type = .THIS,
     .lexeme = "this",
     .literal = "null",
 };
 
-pub const True = Lexeme{
+pub const True = Token{
     .type = .TRUE,
     .lexeme = "true",
     .literal = "null",
 };
 
-pub const Var = Lexeme{
+pub const Var = Token{
     .type = .VAR,
     .lexeme = "var",
     .literal = "null",
 };
 
-pub const While = Lexeme{
+pub const While = Token{
     .type = .WHILE,
     .lexeme = "while",
     .literal = "null",
