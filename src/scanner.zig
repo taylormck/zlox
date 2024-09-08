@@ -19,7 +19,7 @@ pub fn scan(input: []u8) !ScannerResults {
     var tokens = ArrayList(token.Token).init(std.heap.page_allocator);
     var errors = ArrayList(ScannerError).init(std.heap.page_allocator);
 
-    while (!stream.at_end()) {
+    while (!stream.at_end()) scan_byte_loop: {
         const current_byte = try stream.next();
 
         switch (current_byte) {
@@ -73,7 +73,7 @@ pub fn scan(input: []u8) !ScannerResults {
                             .type = .UNTERMINATED_STRING,
                             .token = "",
                         });
-                        break;
+                        break :scan_byte_loop;
                     }
                 }
 
