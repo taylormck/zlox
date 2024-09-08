@@ -172,7 +172,12 @@ pub fn scan(input: []u8) !ScannerResults {
     return .{ .tokens = tokens.items, .errors = errors.items };
 }
 
-fn process_or_equal(base_token: token.Token, equal_token: token.Token, stream: *ByteStream, list: *ArrayList(token.Token)) !void {
+fn process_or_equal(
+    base_token: token.Token,
+    equal_token: token.Token,
+    stream: *ByteStream,
+    list: *ArrayList(token.Token),
+) !void {
     if (!stream.at_end() and try stream.peek() == '=') {
         try list.append(equal_token);
         try stream.advance();
@@ -203,16 +208,27 @@ const ScannerError = struct {
     type: ScanErrorType,
     token: []const u8,
 
-    pub fn format(self: *const @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+    pub fn format(
+        self: *const @This(),
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
         _ = fmt;
         _ = options;
 
         switch (self.type) {
             .UNEXPECTED_CHARACTER => {
-                try writer.print("[line {d}] Error: Unexpected character: {s}", .{ self.line, self.token });
+                try writer.print(
+                    "[line {d}] Error: Unexpected character: {s}",
+                    .{ self.line, self.token },
+                );
             },
             .UNTERMINATED_STRING => {
-                try writer.print("[line {d}] Error: Unterminated string.", .{self.line});
+                try writer.print(
+                    "[line {d}] Error: Unterminated string.",
+                    .{self.line},
+                );
             },
         }
     }

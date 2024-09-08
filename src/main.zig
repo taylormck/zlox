@@ -44,7 +44,11 @@ pub fn report_usage_error_and_quit() void {
 }
 
 pub fn tokenize(filename: []const u8, print: bool) ![]Token {
-    const file_contents = try std.fs.cwd().readFileAlloc(std.heap.page_allocator, filename, std.math.maxInt(usize));
+    const file_contents = try std.fs.cwd().readFileAlloc(
+        std.heap.page_allocator,
+        filename,
+        std.math.maxInt(usize),
+    );
     defer std.heap.page_allocator.free(file_contents);
 
     const results = try scanner.scan(file_contents);

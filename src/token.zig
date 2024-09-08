@@ -8,8 +8,17 @@ pub const Token = struct {
     lexeme: []const u8 = "",
     literal: []const u8 = "null",
 
-    pub fn format(self: *const @This(), comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.print("{s} {s} {s}", .{ @tagName(self.type), self.lexeme, self.literal });
+    pub fn format(
+        self: *const @This(),
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        try writer.print("{s} {s} {s}", .{
+            @tagName(self.type),
+            self.lexeme,
+            self.literal,
+        });
     }
 };
 
@@ -178,7 +187,9 @@ pub const Slash = Token{
     .lexeme = "/",
 };
 
-pub const EndOfFile = Token{ .type = .EOF };
+pub const EndOfFile = Token{
+    .type = .EOF,
+};
 
 pub const And = Token{
     .type = .AND,
