@@ -78,7 +78,7 @@ pub fn parse_expression(stream: *TokenStream) !?Expression {
                 .number = std.fmt.parseFloat(f64, current_token.lexeme) catch unreachable,
             },
         },
-        .STRING => .{ .literal = .{ .string = current_token.lexeme } },
+        .STRING => .{ .literal = .{ .string = current_token.literal } },
         .IDENTIFIER => .{ .literal = .{ .identifier = current_token.lexeme } },
         .LEFT_PAREN => {
             var expression_list = ArrayList(Expression).init(std.heap.page_allocator);
