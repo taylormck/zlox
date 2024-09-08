@@ -252,7 +252,7 @@ pub fn scan(input: []u8) !ScannerResults {
                 try errors.append(ScannerError{
                     .line = current_line,
                     .type = .UNEXPECTED_CHARACTER,
-                    .token = &.{current_byte},
+                    .token = try stream.slice_prev(),
                 });
             },
         }

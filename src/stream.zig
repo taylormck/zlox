@@ -9,7 +9,7 @@ pub fn Stream(comptime value_type: type) type {
             return .{ .tokens = tokens };
         }
 
-        pub fn peek(self: @This()) !value_type {
+        pub fn peek(self: *const @This()) !value_type {
             if (self.at_end()) {
                 @panic("Tried to peek past end of stream");
             }
@@ -32,8 +32,20 @@ pub fn Stream(comptime value_type: type) type {
             self.position += 1;
         }
 
-        pub fn at_end(self: @This()) bool {
+        pub fn at_beginning(self: *const @This()) bool {
+            return self.position == 0;
+        }
+
+        pub fn at_end(self: *const @This()) bool {
             return self.position >= self.tokens.len;
+        }
+
+        pub fn slice_prev(self: *const @This()) ![]const value_type {
+            if (self.at_beginning()) {
+                @panic("Tried to slice before the beginning of stream");
+            }
+
+            return self.tokens[self.position - 1 .. self.position];
         }
     };
 }
