@@ -6,6 +6,7 @@ const Terminal = union(enum) {
     nil,
     bool: bool,
     eof,
+    number: f64,
 
     pub fn format(
         self: @This(),
@@ -16,6 +17,7 @@ const Terminal = union(enum) {
         switch (self) {
             .nil => try writer.print("{s}", .{@tagName(self)}),
             .bool => |val| try writer.print("{}", .{val}),
+            .number => |val| try writer.print("{d}", .{val}),
             else => {},
         }
     }
@@ -23,7 +25,6 @@ const Terminal = union(enum) {
 
 pub const Expression = union(enum) {
     terminal: Terminal,
-    poop,
 
     pub fn format(
         self: @This(),
@@ -33,7 +34,6 @@ pub const Expression = union(enum) {
     ) !void {
         switch (self) {
             .terminal => |terminal| try writer.print("{}", .{terminal}),
-            else => {},
         }
     }
 };
@@ -45,6 +45,7 @@ pub fn parse_expression(stream: *TokenStream) !?Expression {
         .NIL => Expression{ .terminal = .nil },
         .TRUE => Expression{ .terminal = .{ .bool = true } },
         .FALSE => Expression{ .terminal = .{ .bool = false } },
+        .NUMBER => Expression{ .terminal = .{ .number = std.fmt.parseFloat(f64, next.lexeme) catch unreachable } },
         else => |token| std.debug.panic("Tried to parse unsupported token: {}", .{token}),
     };
 
