@@ -1,8 +1,9 @@
 const std = @import("std");
+const ArrayList = std.ArrayList;
 const Token = @import("token.zig").Token;
 const TokenStream = @import("stream.zig").TokenStream;
 
-const Terminal = union(enum) {
+const Literal = union(enum) {
     nil,
     super,
     this,
@@ -29,7 +30,8 @@ const Terminal = union(enum) {
 };
 
 pub const Expression = union(enum) {
-    terminal: Terminal,
+    literal: Literal,
+    grouping: []Expression,
 
     pub fn format(
         self: @This(),
@@ -38,27 +40,65 @@ pub const Expression = union(enum) {
         writer: anytype,
     ) !void {
         switch (self) {
-            .terminal => |terminal| try writer.print("{}", .{terminal}),
+            .literal => |literal| try writer.print("{}", .{literal}),
+            .grouping => |group| {
+                try writer.print("(", .{});
+
+                for (group, 0..) |exp, i| {
+                    try writer.print("{}", .{exp});
+
+                    if (i < group.len - 1) {
+                        try writer.print(" ", .{});
+                    }
+                }
+
+                try writer.print(")", .{});
+            },
         }
     }
 };
 
 pub fn parse_expression(stream: *TokenStream) !?Expression {
-    const next = try stream.next();
+    const current_token = try stream.next();
 
-    const lhs: Expression = switch (next.type) {
-        .NIL => .{ .terminal = .nil },
-        .SUPER => .{ .terminal = .super },
-        .THIS => .{ .terminal = .this },
-        .TRUE => .{ .terminal = .{ .bool = true } },
-        .FALSE => .{ .terminal = .{ .bool = false } },
+    const lhs: Expression = switch (current_token.type) {
+        .NIL => .{ .literal = .nil },
+        .SUPER => .{ .literal = .super },
+        .THIS => .{ .literal = .this },
+        .TRUE => .{ .literal = .{ .bool = true } },
+        .FALSE => .{ .literal = .{ .bool = false } },
         .NUMBER => .{
-            .terminal = .{
-                .number = std.fmt.parseFloat(f64, next.lexeme) catch unreachable,
+            .literal = .{
+                .number = std.fmt.parseFloat(f64, current_token.lexeme) catch unreachable,
             },
         },
-        .STRING => .{ .terminal = .{ .string = next.lexeme } },
-        .IDENTIFIER => .{ .terminal = .{ .identifier = next.lexeme } },
+        .STRING => .{ .literal = .{ .string = current_token.lexeme } },
+        .IDENTIFIER => .{ .literal = .{ .identifier = current_token.lexeme } },
+        .LEFT_PAREN => {
+            var expression_list = ArrayList(Expression).init(std.heap.page_allocator);
+
+            while (!stream.at_end()) {
+                const next_token = try stream.peek();
+                try std.io.getStdErr().writer().print("next token: {s}\n", .{next_token});
+
+                switch (next_token.type) {
+                    .RIGHT_PAREN => {
+                        try stream.advance();
+                        break;
+                    },
+                    else => {
+                        const next_exp = try parse_expression(stream) orelse unreachable;
+                        try expression_list.append(next_exp);
+                    },
+                }
+
+                if (next_token.type != .RIGHT_PAREN) {
+                    // TODO: report parser error
+                }
+            }
+
+            return .{ .grouping = expression_list.items };
+        },
         else => |token| std.debug.panic(
             "Tried to parse unsupported token: {}",
             .{token},
