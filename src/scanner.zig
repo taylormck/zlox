@@ -54,89 +54,26 @@ pub fn scan(input: []u8) !ScannerResults {
             10 => {
                 current_line += 1;
             },
-            '(' => {
-                try result.append(token.LeftParen);
-            },
-            ')' => {
-                try result.append(token.RightParen);
-            },
-            '{' => {
-                try result.append(token.LeftBrace);
-            },
-            '}' => {
-                try result.append(token.RightBrace);
-            },
-            ',' => {
-                try result.append(token.Comma);
-            },
-            '.' => {
-                try result.append(token.Dot);
-            },
-            '-' => {
-                try result.append(token.Minus);
-            },
-            '+' => {
-                try result.append(token.Plus);
-            },
-            ';' => {
-                try result.append(token.Semicolon);
-            },
-            '*' => {
-                try result.append(token.Star);
-            },
-            '=' => {
-                switch (try stream.peek()) {
-                    '=' => {
-                        try result.append(token.EqualEqual);
-                        try stream.advance();
-                    },
-                    else => {
-                        try result.append(token.Equal);
-                    },
-                }
-            },
-            '!' => {
-                switch (try stream.peek()) {
-                    '=' => {
-                        try result.append(token.BangEqual);
-                        try stream.advance();
-                    },
-                    else => {
-                        try result.append(token.Bang);
-                    },
-                }
-            },
-            '<' => {
-                switch (try stream.peek()) {
-                    '=' => {
-                        try result.append(token.LessEqual);
-                        try stream.advance();
-                    },
-                    else => {
-                        try result.append(token.Less);
-                    },
-                }
-            },
-            '>' => {
-                switch (try stream.peek()) {
-                    '=' => {
-                        try result.append(token.GreaterEqual);
-                        try stream.advance();
-                    },
-                    else => {
-                        try result.append(token.Greater);
-                    },
-                }
-            },
+            '(' => try result.append(token.LeftParen),
+            ')' => try result.append(token.RightParen),
+            '{' => try result.append(token.LeftBrace),
+            '}' => try result.append(token.RightBrace),
+            ',' => try result.append(token.Comma),
+            '.' => try result.append(token.Dot),
+            '-' => try result.append(token.Minus),
+            '+' => try result.append(token.Plus),
+            ';' => try result.append(token.Semicolon),
+            '*' => try result.append(token.Star),
+            '=' => try process_or_equal(token.Equal, token.EqualEqual, &stream, &result),
+            '!' => try process_or_equal(token.Bang, token.BangEqual, &stream, &result),
+            '<' => try process_or_equal(token.Less, token.LessEqual, &stream, &result),
+            '>' => try process_or_equal(token.Greater, token.GreaterEqual, &stream, &result),
             '/' => {
-                switch (try stream.peek()) {
-                    '/' => {
-                        while (try stream.next() != 10) {}
-                        current_line += 1;
-                    },
-                    else => {
-                        try result.append(token.Slash);
-                    },
+                if (!stream.at_end() and try stream.peek() == '/') {
+                    while (try stream.next() != 10 and !stream.at_end()) {}
+                    current_line += 1;
+                } else {
+                    try result.append(token.Slash);
                 }
             },
             '"' => {
@@ -262,6 +199,15 @@ pub fn scan(input: []u8) !ScannerResults {
     try result.append(token.EndOfFile);
 
     return ScannerResults{ result, errors };
+}
+
+fn process_or_equal(base_token: token.Token, equal_token: token.Token, stream: *ByteStream, list: *ArrayList(token.Token)) !void {
+    if (!stream.at_end() and try stream.peek() == '=') {
+        try list.append(equal_token);
+        try stream.advance();
+    } else {
+        try list.append(base_token);
+    }
 }
 
 fn is_numeric(c: u8) bool {

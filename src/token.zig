@@ -8,10 +8,7 @@ pub const Token = struct {
     lexeme: []const u8 = "",
     literal: []const u8 = "null",
 
-    pub fn format(self: *const @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-
+    pub fn format(self: *const @This(), comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
         try writer.print("{s} {s} {s}", .{ @tagName(self.type), self.lexeme, self.literal });
     }
 };
