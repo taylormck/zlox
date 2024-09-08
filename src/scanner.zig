@@ -2,10 +2,12 @@ const std = @import("std");
 const ArrayList = std.ArrayList;
 const Tuple = std.meta.Tuple;
 
-const lexeme = @import("lexeme.zig");
+const ByteStream = @import("stream.zig").ByteStream;
+
+const token = @import("token.zig");
 
 const ScannerResults = Tuple(&.{
-    ArrayList(lexeme.Lexeme),
+    ArrayList(token.Token),
     ArrayList(ScannerError),
 });
 
@@ -17,7 +19,7 @@ const ScannerErrorType = enum {
 const ScannerError = struct {
     line: usize,
     type: ScannerErrorType,
-    token: []u8,
+    token: []const u8,
 
     pub fn format(self: *const @This(), comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
@@ -35,14 +37,17 @@ const ScannerError = struct {
 };
 
 pub fn scan(input: []u8) !ScannerResults {
-    var current: usize = 0;
+    var stream = ByteStream.new(input);
+
     var current_line: usize = 1;
 
-    var result = ArrayList(lexeme.Lexeme).init(std.heap.page_allocator);
+    var result = ArrayList(token.Token).init(std.heap.page_allocator);
     var errors = ArrayList(ScannerError).init(std.heap.page_allocator);
 
-    while (current < input.len) {
-        switch (input[current]) {
+    while (!stream.at_end()) {
+        const current_byte = try stream.next();
+
+        switch (current_byte) {
             // NOTE: 9 is a horizontal tab
             ' ', 9 => {},
             // NOTE: 10 a line feed character
@@ -50,160 +55,116 @@ pub fn scan(input: []u8) !ScannerResults {
                 current_line += 1;
             },
             '(' => {
-                try result.append(lexeme.LeftParen);
+                try result.append(token.LeftParen);
             },
             ')' => {
-                try result.append(lexeme.RightParen);
+                try result.append(token.RightParen);
             },
             '{' => {
-                try result.append(lexeme.LeftBrace);
+                try result.append(token.LeftBrace);
             },
             '}' => {
-                try result.append(lexeme.RightBrace);
+                try result.append(token.RightBrace);
             },
             ',' => {
-                try result.append(lexeme.Comma);
+                try result.append(token.Comma);
             },
             '.' => {
-                try result.append(lexeme.Dot);
+                try result.append(token.Dot);
             },
             '-' => {
-                try result.append(lexeme.Minus);
+                try result.append(token.Minus);
             },
             '+' => {
-                try result.append(lexeme.Plus);
+                try result.append(token.Plus);
             },
             ';' => {
-                try result.append(lexeme.Semicolon);
+                try result.append(token.Semicolon);
             },
             '*' => {
-                try result.append(lexeme.Star);
+                try result.append(token.Star);
             },
             '=' => {
-                const look_ahead_index = current + 1;
-
-                if (look_ahead_index >= input.len) {
-                    try result.append(lexeme.Equal);
-                    break;
-                }
-
-                switch (input[look_ahead_index]) {
+                switch (try stream.peek()) {
                     '=' => {
-                        try result.append(lexeme.EqualEqual);
-                        current += 1;
+                        try result.append(token.EqualEqual);
+                        try stream.advance();
                     },
                     else => {
-                        try result.append(lexeme.Equal);
+                        try result.append(token.Equal);
                     },
                 }
             },
             '!' => {
-                const look_ahead_index = current + 1;
-
-                if (look_ahead_index >= input.len) {
-                    try result.append(lexeme.Bang);
-                    break;
-                }
-
-                switch (input[look_ahead_index]) {
+                switch (try stream.peek()) {
                     '=' => {
-                        try result.append(lexeme.BangEqual);
-                        current += 1;
+                        try result.append(token.BangEqual);
+                        try stream.advance();
                     },
                     else => {
-                        try result.append(lexeme.Bang);
+                        try result.append(token.Bang);
                     },
                 }
             },
             '<' => {
-                const look_ahead_index = current + 1;
-
-                if (look_ahead_index >= input.len) {
-                    try result.append(lexeme.Less);
-                    break;
-                }
-
-                switch (input[look_ahead_index]) {
+                switch (try stream.peek()) {
                     '=' => {
-                        try result.append(lexeme.LessEqual);
-                        current += 1;
+                        try result.append(token.LessEqual);
+                        try stream.advance();
                     },
                     else => {
-                        try result.append(lexeme.Less);
+                        try result.append(token.Less);
                     },
                 }
             },
             '>' => {
-                const look_ahead_index = current + 1;
-
-                if (look_ahead_index >= input.len) {
-                    try result.append(lexeme.Greater);
-                    break;
-                }
-
-                switch (input[look_ahead_index]) {
+                switch (try stream.peek()) {
                     '=' => {
-                        try result.append(lexeme.GreaterEqual);
-                        current += 1;
+                        try result.append(token.GreaterEqual);
+                        try stream.advance();
                     },
                     else => {
-                        try result.append(lexeme.Greater);
+                        try result.append(token.Greater);
                     },
                 }
             },
             '/' => {
-                const look_ahead_index = current + 1;
-
-                if (look_ahead_index >= input.len) {
-                    try result.append(lexeme.Slash);
-                    break;
-                }
-
-                switch (input[look_ahead_index]) {
+                switch (try stream.peek()) {
                     '/' => {
-                        while (current < input.len and input[current] != 10) {
-                            current += 1;
-                        }
+                        while (try stream.next() != 10) {}
                         current_line += 1;
                     },
                     else => {
-                        try result.append(lexeme.Slash);
+                        try result.append(token.Slash);
                     },
                 }
             },
             '"' => {
                 const starting_line = current_line;
                 var string_content = ArrayList(u8).init(std.heap.page_allocator);
-
                 try string_content.append('"');
-                current += 1;
 
-                while (current < input.len) {
-                    const current_char = input[current];
+                while (try stream.peek() != '"') {
+                    if (stream.at_end()) {
+                        try errors.append(ScannerError{
+                            .line = starting_line,
+                            .type = .UNTERMINATED_STRING,
+                            .token = "",
+                        });
+                        break;
+                    }
+
+                    const current_char = try stream.next();
                     try string_content.append(current_char);
 
                     // NOTE: Increment the new line in the string
                     if (current_char == 10) {
                         current_line += 1;
                     }
-
-                    if (current_char == '"') {
-                        break;
-                    }
-
-                    current += 1;
                 }
+                try string_content.append('"');
 
-                if (current >= input.len) {
-                    try errors.append(ScannerError{
-                        .line = starting_line,
-                        .type = .UNTERMINATED_STRING,
-                        .token = "",
-                    });
-                    break;
-                }
-
-                const new_lexeme = lexeme.Lexeme{
+                const new_lexeme = token.Token{
                     .type = .STRING,
                     .lexeme = string_content.items,
                     .literal = string_content.items[1 .. string_content.items.len - 1],
@@ -213,20 +174,19 @@ pub fn scan(input: []u8) !ScannerResults {
             },
             '0'...'9' => {
                 var number_content = ArrayList(u8).init(std.heap.page_allocator);
+                try number_content.append(current_byte);
 
-                while (current < input.len and is_numeric(input[current])) {
-                    try number_content.append(input[current]);
-                    current += 1;
+                while (!stream.at_end() and is_numeric(try stream.peek())) {
+                    try number_content.append(try stream.next());
                 }
 
-                if (current < input.len and input[current] == '.') {
+                if (!stream.at_end() and try stream.peek() == '.') {
                     try number_content.append('.');
-                    current += 1;
+                    try stream.advance();
 
                     // Consume any remaining digits.
-                    while (current < input.len and is_numeric(input[current])) {
-                        try number_content.append(input[current]);
-                        current += 1;
+                    while (!stream.at_end() and is_numeric(try stream.peek())) {
+                        try number_content.append(try stream.next());
                     }
                 }
 
@@ -255,12 +215,7 @@ pub fn scan(input: []u8) !ScannerResults {
                     try number_literal.append('0');
                 }
 
-                // Due to the look-ahead nature of the algorithm we use here,
-                // we need to set the cursor back so that we don't accidentally
-                // consume the first non-number character.
-                current -= 1;
-
-                const new_lexeme = lexeme.Lexeme{
+                const new_lexeme = token.Token{
                     .type = .NUMBER,
                     .lexeme = number_content.items,
                     .literal = number_literal.items,
@@ -270,21 +225,16 @@ pub fn scan(input: []u8) !ScannerResults {
             },
             'a'...'z', 'A'...'Z', '_' => {
                 var identifier_content = ArrayList(u8).init(std.heap.page_allocator);
+                try identifier_content.append(current_byte);
 
-                while (current < input.len and is_valid_identifier_char(input[current])) {
-                    try identifier_content.append(input[current]);
-                    current += 1;
+                while (!stream.at_end() and is_valid_identifier_char(try stream.peek())) {
+                    try identifier_content.append(try stream.next());
                 }
 
-                // Due to the look-ahead nature of the algorithm we use here,
-                // we need to set the cursor back so that we don't accidentally
-                // consume the first non-number character.
-                current -= 1;
-
-                if (lexeme.keywords.has(identifier_content.items)) {
-                    try result.append(lexeme.keywords.get(identifier_content.items).?);
+                if (token.keywords.has(identifier_content.items)) {
+                    try result.append(token.keywords.get(identifier_content.items).?);
                 } else {
-                    const new_lexeme = lexeme.Lexeme{
+                    const new_lexeme = token.Token{
                         .type = .IDENTIFIER,
                         .lexeme = identifier_content.items,
                         .literal = "null",
@@ -297,16 +247,14 @@ pub fn scan(input: []u8) !ScannerResults {
                 try errors.append(ScannerError{
                     .line = current_line,
                     .type = .UNEXPECTED_CHARACTER,
-                    .token = input[current .. current + 1],
+                    .token = &.{current_byte},
                 });
             },
         }
-
-        current += 1;
     }
 
     // Always add an EOF token to the end
-    try result.append(lexeme.EndOfFile);
+    try result.append(token.EndOfFile);
 
     return ScannerResults{ result, errors };
 }
