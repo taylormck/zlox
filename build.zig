@@ -2,11 +2,14 @@ const std = @import("std");
 
 // Learn more about this file here: https://ziglang.org/learn/build-system
 pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
     const exe = b.addExecutable(.{
         .name = "main",
         .root_source_file = b.path("src/main.zig"),
-        .target = b.standardTargetOptions(.{}),
-        .optimize = b.standardOptimizeOption(.{}),
+        .target = target,
+        .optimize = optimize,
     });
 
     // This declares intent for the executable to be installed into the
@@ -30,4 +33,15 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| {
         run_cmd.addArgs(args);
     }
+
+    const exe_unit_tests = b.addTest(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_unit_tests = b.addRunArtifact(exe_unit_tests);
+
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_unit_tests.step);
 }
