@@ -50,12 +50,8 @@ pub const Expression = union(enum) {
             .grouping => |group| {
                 try writer.print("(group", .{});
 
-                for (group, 0..) |exp, i| {
-                    try writer.print("{}", .{exp});
-
-                    if (i < group.len - 1) {
-                        try writer.print(" ", .{});
-                    }
+                for (group) |exp| {
+                    try writer.print(" {}", .{exp});
                 }
 
                 try writer.print(")", .{});
