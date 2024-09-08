@@ -1,24 +1,49 @@
 const std = @import("std");
+const Token = @import("token.zig").Token;
 
 const scanner = @import("scanner.zig");
+const expression = @import("expression.zig");
 
 pub fn main() !void {
+    const command = try parse_args();
+    switch (command) {
+        .tokenize => |filename| _ = try tokenize(filename, true),
+        .parse => |filename| try parse(filename),
+    }
+}
+
+const Command = union(enum) {
+    tokenize: []const u8,
+    parse: []const u8,
+};
+
+pub fn parse_args() !Command {
     const args = try std.process.argsAlloc(std.heap.page_allocator);
-    defer std.process.argsFree(std.heap.page_allocator, args);
 
     if (args.len < 3) {
-        std.debug.print("Usage: ./your_program.sh tokenize <filename>\n", .{});
-        std.process.exit(1);
+        report_usage_error_and_quit();
     }
 
     const command = args[1];
     const filename = args[2];
 
-    if (!std.mem.eql(u8, command, "tokenize")) {
-        std.debug.print("Unknown command: {s}\n", .{command});
-        std.process.exit(1);
+    inline for (comptime std.meta.fieldNames(Command)) |field| {
+        if (std.mem.eql(u8, command, field)) {
+            return @unionInit(Command, field, filename);
+        }
     }
 
+    report_usage_error_and_quit();
+
+    return error.InvalidCommand;
+}
+
+pub fn report_usage_error_and_quit() void {
+    std.debug.print("Usage: ./zig-interpreter <tokenize|parse> <filename>\n", .{});
+    std.process.exit(1);
+}
+
+pub fn tokenize(filename: []const u8, print: bool) ![]Token {
     const file_contents = try std.fs.cwd().readFileAlloc(std.heap.page_allocator, filename, std.math.maxInt(usize));
     defer std.heap.page_allocator.free(file_contents);
 
@@ -29,13 +54,26 @@ pub fn main() !void {
         try std.io.getStdErr().writer().print("{s}\n", .{err});
     }
 
-    const lexemes = results[0];
-
-    for (lexemes.items) |lexeme| {
-        try std.io.getStdOut().writer().print("{s}\n", .{lexeme});
+    const tokens = results[0];
+    if (print) {
+        for (tokens.items) |token| {
+            try std.io.getStdOut().writer().print("{s}\n", .{token});
+        }
     }
 
     if (errors.items.len > 0) {
         std.process.exit(65);
+    }
+
+    return tokens.items;
+}
+
+pub fn parse(filename: []const u8) !void {
+    const tokens = try tokenize(filename, false);
+
+    const optional_expressions = try expression.parse_tokens(tokens);
+
+    if (optional_expressions) |expressions| {
+        try std.io.getStdOut().writer().print("{s}\n", .{expressions});
     }
 }
