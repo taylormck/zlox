@@ -53,9 +53,6 @@ const Operator = union(enum) {
 };
 
 const ExpressionType = union(enum) {
-    // literal,
-    // grouping,
-    // unary,
     literal: Literal,
     grouping,
     unary: Operator,
@@ -138,6 +135,16 @@ pub fn parse_expression(stream: *TokenStream) !?Expression {
 
             return .{
                 .type = .{ .unary = .negate },
+                .children = children,
+            };
+        },
+        .MINUS => {
+            const child = try parse_expression(stream) orelse return error.UnexpectedToken;
+            var children = ArrayList(Expression).init(std.heap.page_allocator);
+            try children.append(child);
+
+            return .{
+                .type = .{ .unary = .minus },
                 .children = children,
             };
         },
