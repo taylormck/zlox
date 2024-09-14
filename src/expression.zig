@@ -42,6 +42,10 @@ const Operator = union(enum) {
     divide,
     add,
     subtract,
+    less,
+    less_equal,
+    greater,
+    greater_equal,
 
     pub fn format(
         self: @This(),
@@ -56,6 +60,10 @@ const Operator = union(enum) {
             .divide => try writer.print("/", .{}),
             .add => try writer.print("+", .{}),
             .subtract => try writer.print("-", .{}),
+            .less => try writer.print("<", .{}),
+            .less_equal => try writer.print("<=", .{}),
+            .greater => try writer.print(">", .{}),
+            .greater_equal => try writer.print(">=", .{}),
         }
     }
 };
@@ -66,6 +74,7 @@ const ExpressionType = union(enum) {
     unary: Operator,
     factor: Operator,
     term: Operator,
+    comparison: Operator,
 };
 
 pub const Expression = struct {
@@ -96,7 +105,7 @@ pub const Expression = struct {
 
                 try writer.print(")", .{});
             },
-            .unary, .factor, .term => |op| {
+            .unary, .factor, .term, .comparison => |op| {
                 try writer.print("({}", .{op});
                 for (self.children.items) |exp| {
                     try writer.print(" {}", .{exp});
@@ -212,8 +221,35 @@ fn parse_term(stream: *TokenStream) !?Expression {
     return lhs;
 }
 
+fn parse_comparison(stream: *TokenStream) !?Expression {
+    var lhs = try parse_term(stream) orelse return null;
+
+    while (match(stream, &.{ .LESS, .LESS_EQUAL, .GREATER, .GREATER_EQUAL })) {
+        const op = try stream.next();
+        const rhs = try parse_term(stream) orelse return error.UnexpectedToken;
+        var children = ArrayList(Expression).init(std.heap.page_allocator);
+        try children.append(lhs);
+        try children.append(rhs);
+
+        const comparison_type: Operator = switch (op.type) {
+            .LESS => .less,
+            .LESS_EQUAL => .less_equal,
+            .GREATER => .greater,
+            .GREATER_EQUAL => .greater_equal,
+            else => return ParserError.UnexpectedToken,
+        };
+
+        lhs = .{
+            .type = .{ .comparison = comparison_type },
+            .children = children,
+        };
+    }
+
+    return lhs;
+}
+
 pub fn parse_expression(stream: *TokenStream) !?Expression {
-    return parse_term(stream);
+    return parse_comparison(stream);
 }
 
 fn match(stream: *TokenStream, expected: []const token.TokenType) bool {
