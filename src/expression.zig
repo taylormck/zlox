@@ -46,6 +46,8 @@ const Operator = union(enum) {
     less_equal,
     greater,
     greater_equal,
+    equal,
+    not_equal,
 
     pub fn format(
         self: @This(),
@@ -64,6 +66,8 @@ const Operator = union(enum) {
             .less_equal => try writer.print("<=", .{}),
             .greater => try writer.print(">", .{}),
             .greater_equal => try writer.print(">=", .{}),
+            .equal => try writer.print("==", .{}),
+            .not_equal => try writer.print("!=", .{}),
         }
     }
 };
@@ -75,6 +79,7 @@ const ExpressionType = union(enum) {
     factor: Operator,
     term: Operator,
     comparison: Operator,
+    equality: Operator,
 };
 
 pub const Expression = struct {
@@ -105,7 +110,7 @@ pub const Expression = struct {
 
                 try writer.print(")", .{});
             },
-            .unary, .factor, .term, .comparison => |op| {
+            .unary, .factor, .term, .comparison, .equality => |op| {
                 try writer.print("({}", .{op});
                 for (self.children.items) |exp| {
                     try writer.print(" {}", .{exp});
@@ -267,8 +272,33 @@ fn parse_comparison(stream: *TokenStream) !?Expression {
     return lhs;
 }
 
+fn parse_equality(stream: *TokenStream) !?Expression {
+    var lhs = try parse_comparison(stream) orelse return null;
+
+    while (match(stream, &.{ .EQUAL_EQUAL, .BANG_EQUAL })) {
+        const op = try stream.next();
+        const rhs = try parse_comparison(stream) orelse return error.UnexpectedToken;
+        var children = ArrayList(Expression).init(std.heap.page_allocator);
+        try children.append(lhs);
+        try children.append(rhs);
+
+        const equality_type: Operator = switch (op.type) {
+            .EQUAL_EQUAL => .equal,
+            .BANG_EQUAL => .not_equal,
+            else => return ParserError.UnexpectedToken,
+        };
+
+        lhs = .{
+            .type = .{ .equality = equality_type },
+            .children = children,
+        };
+    }
+
+    return lhs;
+}
+
 pub fn parse_expression(stream: *TokenStream) !?Expression {
-    return parse_comparison(stream);
+    return parse_equality(stream);
 }
 
 fn match(stream: *TokenStream, expected: []const token.TokenType) bool {
