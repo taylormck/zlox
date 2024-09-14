@@ -2,7 +2,7 @@ const std = @import("std");
 const Token = @import("token.zig").Token;
 
 const scanner = @import("scanner.zig");
-const parser = @import("parser.zig");
+const parser = @import("parser/parser.zig");
 
 pub fn main() !void {
     const command = try parse_args();
