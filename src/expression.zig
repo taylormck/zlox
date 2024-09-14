@@ -62,6 +62,13 @@ pub const Expression = struct {
     type: ExpressionType,
     children: ArrayList(Expression) = ArrayList(Expression).init(std.heap.page_allocator),
 
+    pub fn deinit(self: *@This()) void {
+        for (self.children.items) |exp| {
+            exp.deinit();
+        }
+        self.children.deinit();
+    }
+
     pub fn format(
         self: @This(),
         comptime _: []const u8,
@@ -88,7 +95,6 @@ pub fn parse_expression(stream: *TokenStream) !?Expression {
     const current_token = try stream.next();
 
     const lhs: Expression = switch (current_token.type) {
-        .NIL => .{ .type = .{ .literal = .nil } },
         .SUPER => .{ .type = .{ .literal = .super } },
         .THIS => .{ .type = .{ .literal = .this } },
         .TRUE => .{ .type = .{ .literal = .{ .bool = true } } },
