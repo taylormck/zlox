@@ -119,48 +119,52 @@ pub const Expression = struct {
 fn parse_primary(stream: *TokenStream) (ParserError || std.mem.Allocator.Error)!?Expression {
     const current_token = try stream.next();
 
-    const expr: Expression = switch (current_token.type) {
-        .NIL => .{ .type = .{ .literal = .nil } },
-        .SUPER => .{ .type = .{ .literal = .super } },
-        .THIS => .{ .type = .{ .literal = .this } },
-        .TRUE => .{ .type = .{ .literal = .{ .bool = true } } },
-        .FALSE => .{ .type = .{ .literal = .{ .bool = false } } },
-        .NUMBER => .{ .type = .{ .literal = .{
+    const literal_type: Literal = switch (current_token.type) {
+        .NIL => .nil,
+        .SUPER => .super,
+        .THIS => .this,
+        .TRUE => .{ .bool = true },
+        .FALSE => .{ .bool = false },
+        .NUMBER => .{
             .number = std.fmt.parseFloat(f64, current_token.lexeme) catch unreachable,
-        } } },
-        .STRING => .{ .type = .{ .literal = .{ .string = current_token.literal } } },
-        .IDENTIFIER => .{ .type = .{ .literal = .{ .identifier = current_token.lexeme } } },
-        .LEFT_PAREN => {
-            var expression_list = ArrayList(Expression).init(std.heap.page_allocator);
-
-            while (!stream.at_end()) {
-                const next_token = try stream.peek();
-
-                switch (next_token.type) {
-                    .RIGHT_PAREN => {
-                        try stream.advance();
-                        break;
-                    },
-                    else => {
-                        const next_exp = try parse_expression(stream) orelse unreachable;
-                        try expression_list.append(next_exp);
-                    },
-                }
-
-                if (next_token.type != .RIGHT_PAREN) {
-                    // TODO: report parser error
-                }
-            }
-
-            return .{
-                .type = .grouping,
-                .children = expression_list,
-            };
         },
+        .STRING => .{ .string = current_token.literal },
+        .IDENTIFIER => .{ .identifier = current_token.lexeme },
+        .LEFT_PAREN => return parse_group(stream),
         else => return ParserError.UnexpectedToken,
     };
 
-    return expr;
+    return .{
+        .type = .{ .literal = literal_type },
+    };
+}
+
+fn parse_group(stream: *TokenStream) !?Expression {
+    var expression_list = ArrayList(Expression).init(std.heap.page_allocator);
+
+    while (!stream.at_end()) {
+        const next_token = try stream.peek();
+
+        switch (next_token.type) {
+            .RIGHT_PAREN => {
+                try stream.advance();
+                break;
+            },
+            else => {
+                const next_exp = try parse_expression(stream) orelse unreachable;
+                try expression_list.append(next_exp);
+            },
+        }
+
+        if (next_token.type != .RIGHT_PAREN) {
+            // TODO: report parser error
+        }
+    }
+
+    return .{
+        .type = .grouping,
+        .children = expression_list,
+    };
 }
 
 fn parse_unary(stream: *TokenStream) !?Expression {
@@ -171,10 +175,15 @@ fn parse_unary(stream: *TokenStream) !?Expression {
         var children = ArrayList(Expression).init(std.heap.page_allocator);
         try children.append(child);
 
-        return switch (op.type) {
-            .MINUS => .{ .type = .{ .unary = .minus }, .children = children },
-            .BANG => .{ .type = .{ .unary = .negate }, .children = children },
+        const unary_type: Operator = switch (op.type) {
+            .MINUS => .minus,
+            .BANG => .negate,
             else => return ParserError.UnexpectedToken,
+        };
+
+        return .{
+            .type = .{ .unary = unary_type },
+            .children = children,
         };
     }
 
@@ -191,10 +200,15 @@ fn parse_factor(stream: *TokenStream) !?Expression {
         try children.append(lhs);
         try children.append(rhs);
 
-        lhs = switch (op.type) {
-            .STAR => .{ .type = .{ .factor = .multiply }, .children = children },
-            .SLASH => .{ .type = .{ .factor = .divide }, .children = children },
+        const factor_type: Operator = switch (op.type) {
+            .STAR => .multiply,
+            .SLASH => .divide,
             else => return ParserError.UnexpectedToken,
+        };
+
+        lhs = .{
+            .type = .{ .factor = factor_type },
+            .children = children,
         };
     }
 
@@ -211,10 +225,15 @@ fn parse_term(stream: *TokenStream) !?Expression {
         try children.append(lhs);
         try children.append(rhs);
 
-        lhs = switch (op.type) {
-            .PLUS => .{ .type = .{ .factor = .add }, .children = children },
-            .MINUS => .{ .type = .{ .factor = .subtract }, .children = children },
+        const term_type: Operator = switch (op.type) {
+            .PLUS => .add,
+            .MINUS => .subtract,
             else => return ParserError.UnexpectedToken,
+        };
+
+        lhs = .{
+            .type = .{ .term = term_type },
+            .children = children,
         };
     }
 
