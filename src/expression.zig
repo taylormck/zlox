@@ -35,9 +35,9 @@ const Literal = union(enum) {
     }
 };
 
-pub const Expression = union(enum) {
-    literal: Literal,
-    grouping: []Expression,
+const Operator = union(enum) {
+    minus,
+    negate,
 
     pub fn format(
         self: @This(),
@@ -46,16 +46,43 @@ pub const Expression = union(enum) {
         writer: anytype,
     ) !void {
         switch (self) {
+            .minus => try writer.print("-", .{}),
+            .negate => try writer.print("!", .{}),
+        }
+    }
+};
+
+const ExpressionType = union(enum) {
+    // literal,
+    // grouping,
+    // unary,
+    literal: Literal,
+    grouping,
+    unary: Operator,
+};
+
+pub const Expression = struct {
+    type: ExpressionType,
+    children: ArrayList(Expression) = ArrayList(Expression).init(std.heap.page_allocator),
+
+    pub fn format(
+        self: @This(),
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        switch (self.type) {
             .literal => |literal| try writer.print("{}", .{literal}),
-            .grouping => |group| {
+            .grouping => {
                 try writer.print("(group", .{});
 
-                for (group) |exp| {
+                for (self.children.items) |exp| {
                     try writer.print(" {}", .{exp});
                 }
 
                 try writer.print(")", .{});
             },
+            .unary => |op| try writer.print("({} {})", .{ op, self.children.items[0] }),
         }
     }
 };
@@ -64,18 +91,16 @@ pub fn parse_expression(stream: *TokenStream) !?Expression {
     const current_token = try stream.next();
 
     const lhs: Expression = switch (current_token.type) {
-        .NIL => .{ .literal = .nil },
-        .SUPER => .{ .literal = .super },
-        .THIS => .{ .literal = .this },
-        .TRUE => .{ .literal = .{ .bool = true } },
-        .FALSE => .{ .literal = .{ .bool = false } },
-        .NUMBER => .{
-            .literal = .{
-                .number = std.fmt.parseFloat(f64, current_token.lexeme) catch unreachable,
-            },
-        },
-        .STRING => .{ .literal = .{ .string = current_token.literal } },
-        .IDENTIFIER => .{ .literal = .{ .identifier = current_token.lexeme } },
+        .NIL => .{ .type = .{ .literal = .nil } },
+        .SUPER => .{ .type = .{ .literal = .super } },
+        .THIS => .{ .type = .{ .literal = .this } },
+        .TRUE => .{ .type = .{ .literal = .{ .bool = true } } },
+        .FALSE => .{ .type = .{ .literal = .{ .bool = false } } },
+        .NUMBER => .{ .type = .{ .literal = .{
+            .number = std.fmt.parseFloat(f64, current_token.lexeme) catch unreachable,
+        } } },
+        .STRING => .{ .type = .{ .literal = .{ .string = current_token.literal } } },
+        .IDENTIFIER => .{ .type = .{ .literal = .{ .identifier = current_token.lexeme } } },
         .LEFT_PAREN => {
             var expression_list = ArrayList(Expression).init(std.heap.page_allocator);
 
@@ -98,7 +123,23 @@ pub fn parse_expression(stream: *TokenStream) !?Expression {
                 }
             }
 
-            return .{ .grouping = expression_list.items };
+            return .{
+                .type = .grouping,
+                .children = ArrayList(Expression).fromOwnedSlice(
+                    std.heap.page_allocator,
+                    expression_list.items,
+                ),
+            };
+        },
+        .BANG => {
+            const child = try parse_expression(stream) orelse return error.UnexpectedToken;
+            var children = ArrayList(Expression).init(std.heap.page_allocator);
+            try children.append(child);
+
+            return .{
+                .type = .{ .unary = .negate },
+                .children = children,
+            };
         },
         else => |token| std.debug.panic(
             "Tried to parse unsupported token: {}",
