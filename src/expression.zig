@@ -40,6 +40,8 @@ const Operator = union(enum) {
     negate,
     multiply,
     divide,
+    add,
+    subtract,
 
     pub fn format(
         self: @This(),
@@ -52,6 +54,8 @@ const Operator = union(enum) {
             .negate => try writer.print("!", .{}),
             .multiply => try writer.print("*", .{}),
             .divide => try writer.print("/", .{}),
+            .add => try writer.print("+", .{}),
+            .subtract => try writer.print("-", .{}),
         }
     }
 };
@@ -61,6 +65,7 @@ const ExpressionType = union(enum) {
     grouping,
     unary: Operator,
     factor: Operator,
+    term: Operator,
 };
 
 pub const Expression = struct {
@@ -91,7 +96,7 @@ pub const Expression = struct {
 
                 try writer.print(")", .{});
             },
-            .unary, .factor => |op| {
+            .unary, .factor, .term => |op| {
                 try writer.print("({}", .{op});
                 for (self.children.items) |exp| {
                     try writer.print(" {}", .{exp});
@@ -187,8 +192,28 @@ fn parse_factor(stream: *TokenStream) !?Expression {
     return lhs;
 }
 
+fn parse_term(stream: *TokenStream) !?Expression {
+    var lhs = try parse_factor(stream) orelse return null;
+
+    while (match(stream, &.{ .PLUS, .MINUS })) {
+        const op = try stream.next();
+        const rhs = try parse_factor(stream) orelse return error.UnexpectedToken;
+        var children = ArrayList(Expression).init(std.heap.page_allocator);
+        try children.append(lhs);
+        try children.append(rhs);
+
+        lhs = switch (op.type) {
+            .PLUS => .{ .type = .{ .factor = .add }, .children = children },
+            .MINUS => .{ .type = .{ .factor = .subtract }, .children = children },
+            else => return ParserError.UnexpectedToken,
+        };
+    }
+
+    return lhs;
+}
+
 pub fn parse_expression(stream: *TokenStream) !?Expression {
-    return parse_factor(stream);
+    return parse_term(stream);
 }
 
 fn match(stream: *TokenStream, expected: []const token.TokenType) bool {
