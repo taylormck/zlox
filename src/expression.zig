@@ -1,6 +1,6 @@
 const std = @import("std");
 const ArrayList = std.ArrayList;
-const Token = @import("token.zig").Token;
+const token = @import("token.zig");
 const TokenStream = @import("stream.zig").TokenStream;
 
 const Literal = union(enum) {
@@ -106,6 +106,7 @@ fn parse_primary(stream: *TokenStream) (ParserError || std.mem.Allocator.Error)!
     const current_token = try stream.next();
 
     const expr: Expression = switch (current_token.type) {
+        .NIL => .{ .type = .{ .literal = .nil } },
         .SUPER => .{ .type = .{ .literal = .super } },
         .THIS => .{ .type = .{ .literal = .this } },
         .TRUE => .{ .type = .{ .literal = .{ .bool = true } } },
@@ -149,12 +150,10 @@ fn parse_primary(stream: *TokenStream) (ParserError || std.mem.Allocator.Error)!
 }
 
 fn parse_unary(stream: *TokenStream) !?Expression {
-    const current_token = try stream.peek();
-
-    if (current_token.type == .MINUS or current_token.type == .BANG) {
+    if (match(stream, &.{ .MINUS, .BANG })) {
         const op = try stream.next();
 
-        const child = try parse_unary(stream) orelse return error.UnexpectedToken;
+        const child = try parse_unary(stream) orelse return ParserError.UnexpectedToken;
         var children = ArrayList(Expression).init(std.heap.page_allocator);
         try children.append(child);
 
@@ -170,9 +169,8 @@ fn parse_unary(stream: *TokenStream) !?Expression {
 
 fn parse_factor(stream: *TokenStream) !?Expression {
     var lhs = try parse_unary(stream) orelse return null;
-    var current_token = try stream.peek();
 
-    while (current_token.type == .SLASH or current_token.type == .STAR) {
+    while (match(stream, &.{ .STAR, .SLASH })) {
         const op = try stream.next();
         const rhs = try parse_unary(stream) orelse return error.UnexpectedToken;
         var children = ArrayList(Expression).init(std.heap.page_allocator);
@@ -184,8 +182,6 @@ fn parse_factor(stream: *TokenStream) !?Expression {
             .SLASH => .{ .type = .{ .factor = .divide }, .children = children },
             else => return ParserError.UnexpectedToken,
         };
-
-        current_token = try stream.peek();
     }
 
     return lhs;
@@ -193,6 +189,22 @@ fn parse_factor(stream: *TokenStream) !?Expression {
 
 pub fn parse_expression(stream: *TokenStream) !?Expression {
     return parse_factor(stream);
+}
+
+fn match(stream: *TokenStream, expected: []const token.TokenType) bool {
+    if (stream.at_end()) {
+        return false;
+    }
+
+    const next_token = try stream.peek();
+
+    for (expected) |token_type| {
+        if (next_token.type == token_type) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 const ParserError = error{
