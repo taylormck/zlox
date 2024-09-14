@@ -24,6 +24,14 @@ pub fn Stream(comptime value_type: type) type {
             return token;
         }
 
+        pub fn previous(self: *@This()) !value_type {
+            if (self.at_beginning()) {
+                @panic("Tried to peek before beginning of stream");
+            }
+
+            return self.tokens[self.position - 1];
+        }
+
         pub fn advance(self: *@This()) !void {
             if (self.at_end()) {
                 @panic("Tried to peek past end of stream");

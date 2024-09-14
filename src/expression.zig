@@ -38,6 +38,8 @@ const Literal = union(enum) {
 const Operator = union(enum) {
     minus,
     negate,
+    multiply,
+    divide,
 
     pub fn format(
         self: @This(),
@@ -48,6 +50,8 @@ const Operator = union(enum) {
         switch (self) {
             .minus => try writer.print("-", .{}),
             .negate => try writer.print("!", .{}),
+            .multiply => try writer.print("*", .{}),
+            .divide => try writer.print("/", .{}),
         }
     }
 };
@@ -56,6 +60,7 @@ const ExpressionType = union(enum) {
     literal: Literal,
     grouping,
     unary: Operator,
+    factor: Operator,
 };
 
 pub const Expression = struct {
@@ -86,15 +91,21 @@ pub const Expression = struct {
 
                 try writer.print(")", .{});
             },
-            .unary => |op| try writer.print("({} {})", .{ op, self.children.items[0] }),
+            .unary, .factor => |op| {
+                try writer.print("({}", .{op});
+                for (self.children.items) |exp| {
+                    try writer.print(" {}", .{exp});
+                }
+                try writer.print(")", .{});
+            },
         }
     }
 };
 
-pub fn parse_expression(stream: *TokenStream) !?Expression {
+fn parse_primary(stream: *TokenStream) (ParserError || std.mem.Allocator.Error)!?Expression {
     const current_token = try stream.next();
 
-    const lhs: Expression = switch (current_token.type) {
+    const expr: Expression = switch (current_token.type) {
         .SUPER => .{ .type = .{ .literal = .super } },
         .THIS => .{ .type = .{ .literal = .this } },
         .TRUE => .{ .type = .{ .literal = .{ .bool = true } } },
@@ -128,37 +139,84 @@ pub fn parse_expression(stream: *TokenStream) !?Expression {
 
             return .{
                 .type = .grouping,
-                .children = ArrayList(Expression).fromOwnedSlice(
-                    std.heap.page_allocator,
-                    expression_list.items,
-                ),
+                .children = expression_list,
             };
         },
-        .BANG => {
-            const child = try parse_expression(stream) orelse return error.UnexpectedToken;
-            var children = ArrayList(Expression).init(std.heap.page_allocator);
-            try children.append(child);
-
-            return .{
-                .type = .{ .unary = .negate },
-                .children = children,
-            };
-        },
-        .MINUS => {
-            const child = try parse_expression(stream) orelse return error.UnexpectedToken;
-            var children = ArrayList(Expression).init(std.heap.page_allocator);
-            try children.append(child);
-
-            return .{
-                .type = .{ .unary = .minus },
-                .children = children,
-            };
-        },
-        else => |token| std.debug.panic(
-            "Tried to parse unsupported token: {}",
-            .{token},
-        ),
+        else => return ParserError.UnexpectedToken,
     };
 
-    return lhs;
+    return expr;
 }
+
+fn parse_unary(stream: *TokenStream) !?Expression {
+    const current_token = try stream.peek();
+
+    if (current_token.type == .MINUS or current_token.type == .BANG) {
+        const op = try stream.next();
+
+        const child = try parse_unary(stream) orelse return error.UnexpectedToken;
+        var children = ArrayList(Expression).init(std.heap.page_allocator);
+        try children.append(child);
+
+        return switch (op.type) {
+            .MINUS => .{ .type = .{ .unary = .minus }, .children = children },
+            .BANG => .{ .type = .{ .unary = .negate }, .children = children },
+            else => return ParserError.UnexpectedToken,
+        };
+    }
+
+    return parse_primary(stream);
+}
+
+pub fn parse_expression(stream: *TokenStream) !?Expression {
+    return parse_unary(stream);
+    // const current_token = try stream.next();
+
+    // const lhs: Expression = switch (current_token.type) {
+    //     .BANG => {
+    //         const child = try parse_expression(stream) orelse return error.UnexpectedToken;
+    //         var children = ArrayList(Expression).init(std.heap.page_allocator);
+    //         try children.append(child);
+    //
+    //         return .{
+    //             .type = .{ .unary = .negate },
+    //             .children = children,
+    //         };
+    //     },
+    //     .MINUS => {
+    //         const child = try parse_expression(stream) orelse return error.UnexpectedToken;
+    //         var children = ArrayList(Expression).init(std.heap.page_allocator);
+    //         try children.append(child);
+    //
+    //         return .{
+    //             .type = .{ .unary = .minus },
+    //             .children = children,
+    //         };
+    //     },
+    //     else => |token| std.debug.panic(
+    //         "Tried to parse unsupported token: {}",
+    //         .{token},
+    //     ),
+    // };
+
+    // if (try stream.peek().type == .STAR) {
+    //     // const op_token = try stream.next();
+    //     _ = try stream.next();
+    //     const rhs = try parse_expression(stream) orelse return error.UnexpectedToken;
+    //
+    //     var children = ArrayList(Expression).init(std.heap.page_allocator);
+    //     try children.append(lhs);
+    //     try children.append(rhs);
+    //
+    //     return .{
+    //         .type = .{ .factor = .multiply },
+    //         .children = children,
+    //     };
+    // } else {
+    //     return lhs;
+    // }
+}
+
+const ParserError = error{
+    UnexpectedToken,
+};
