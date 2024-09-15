@@ -30,6 +30,18 @@ pub fn evaluate(expr: Expression) !Value {
                 else => @panic("Unsupported unary operator"),
             };
         },
+        .factor => |factor| {
+            const lhs = try evaluate(expr.children.items[0]);
+            const rhs = try evaluate(expr.children.items[1]);
+
+            const value = switch (factor) {
+                .multiply => lhs.number * rhs.number,
+                .divide => lhs.number / rhs.number,
+                else => @panic("Unsupported term operator"),
+            };
+
+            return .{ .number = value };
+        },
         .term => |term| {
             const lhs = try evaluate(expr.children.items[0]);
             const rhs = try evaluate(expr.children.items[1]);
