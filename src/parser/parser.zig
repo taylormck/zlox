@@ -54,6 +54,8 @@ pub fn parse(tokens: []const Token) !ParseResult {
     var stream = TokenStream.new(tokens);
 
     if (parse_expression(&stream)) |result| {
+        // TODO: instead of returning directly, consider entering panic mode and
+        // try parsing the rest of the file once we get to a spot we understand.
         return switch (result) {
             .ok => |expr| .{
                 .ok = expr,
