@@ -75,10 +75,17 @@ pub fn tokenize(filename: []const u8, print: bool) ![]Token {
 pub fn parse(filename: []const u8) !void {
     const tokens = try tokenize(filename, false);
 
-    const optional_expressions = try parser.parse_tokens(tokens);
-
-    if (optional_expressions) |expressions| {
-        try std.io.getStdOut().writer().print("{s}\n", .{expressions});
+    if (parser.parse(tokens)) |result| {
+        switch (result) {
+            .ok => |expr| try std.io.getStdOut().writer().print("{s}\n", .{expr}),
+            .err => |err| {
+                try std.io.getStdErr().writer().print("{s}\n", .{err});
+                std.process.exit(65);
+            },
+        }
+    } else |err| {
+        try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
+        std.process.exit(65);
     }
 }
 

@@ -7,6 +7,7 @@ pub const Token = struct {
     type: TokenType,
     lexeme: []const u8 = "",
     literal: []const u8 = "null",
+    line: usize = 0,
 
     pub fn format(
         self: *const @This(),

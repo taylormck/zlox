@@ -29,20 +29,20 @@ pub fn scan(input: []u8) !ScannerResults {
             10 => {
                 current_line += 1;
             },
-            '(' => try tokens.append(token.LeftParen),
-            ')' => try tokens.append(token.RightParen),
-            '{' => try tokens.append(token.LeftBrace),
-            '}' => try tokens.append(token.RightBrace),
-            ',' => try tokens.append(token.Comma),
-            '.' => try tokens.append(token.Dot),
-            '-' => try tokens.append(token.Minus),
-            '+' => try tokens.append(token.Plus),
-            ';' => try tokens.append(token.Semicolon),
-            '*' => try tokens.append(token.Star),
-            '=' => try process_or_equal(token.Equal, token.EqualEqual, &stream, &tokens),
-            '!' => try process_or_equal(token.Bang, token.BangEqual, &stream, &tokens),
-            '<' => try process_or_equal(token.Less, token.LessEqual, &stream, &tokens),
-            '>' => try process_or_equal(token.Greater, token.GreaterEqual, &stream, &tokens),
+            '(' => try tokens.append(extend_token_with_line(token.LeftParen, current_line)),
+            ')' => try tokens.append(extend_token_with_line(token.RightParen, current_line)),
+            '{' => try tokens.append(extend_token_with_line(token.LeftBrace, current_line)),
+            '}' => try tokens.append(extend_token_with_line(token.RightBrace, current_line)),
+            ',' => try tokens.append(extend_token_with_line(token.Comma, current_line)),
+            '.' => try tokens.append(extend_token_with_line(token.Dot, current_line)),
+            '-' => try tokens.append(extend_token_with_line(token.Minus, current_line)),
+            '+' => try tokens.append(extend_token_with_line(token.Plus, current_line)),
+            ';' => try tokens.append(extend_token_with_line(token.Semicolon, current_line)),
+            '*' => try tokens.append(extend_token_with_line(token.Star, current_line)),
+            '=' => try process_or_equal(token.Equal, token.EqualEqual, &stream, &tokens, current_line),
+            '!' => try process_or_equal(token.Bang, token.BangEqual, &stream, &tokens, current_line),
+            '<' => try process_or_equal(token.Less, token.LessEqual, &stream, &tokens, current_line),
+            '>' => try process_or_equal(token.Greater, token.GreaterEqual, &stream, &tokens, current_line),
             '/' => {
                 if (!stream.at_end() and try stream.peek() == '/') {
                     while (try stream.next() != 10 and !stream.at_end()) {}
@@ -81,6 +81,7 @@ pub fn scan(input: []u8) !ScannerResults {
                     .type = .STRING,
                     .lexeme = string_content.items,
                     .literal = string_content.items[1 .. string_content.items.len - 1],
+                    .line = current_line,
                 };
 
                 try tokens.append(new_lexeme);
@@ -132,6 +133,7 @@ pub fn scan(input: []u8) !ScannerResults {
                     .type = .NUMBER,
                     .lexeme = number_content.items,
                     .literal = number_literal.items,
+                    .line = current_line,
                 };
 
                 try tokens.append(new_lexeme);
@@ -151,6 +153,7 @@ pub fn scan(input: []u8) !ScannerResults {
                         .type = .IDENTIFIER,
                         .lexeme = identifier_content.items,
                         .literal = "null",
+                        .line = current_line,
                     };
 
                     try tokens.append(new_lexeme);
@@ -177,12 +180,13 @@ fn process_or_equal(
     equal_token: token.Token,
     stream: *ByteStream,
     list: *ArrayList(token.Token),
+    line: usize,
 ) !void {
     if (!stream.at_end() and try stream.peek() == '=') {
-        try list.append(equal_token);
+        try list.append(extend_token_with_line(equal_token, line));
         try stream.advance();
     } else {
-        try list.append(base_token);
+        try list.append(extend_token_with_line(base_token, line));
     }
 }
 
@@ -196,6 +200,14 @@ fn is_alphabetic(c: u8) bool {
 
 fn is_valid_identifier_char(c: u8) bool {
     return is_alphabetic(c) or is_numeric(c) or c == '_';
+}
+
+fn extend_token_with_line(t: token.Token, line: usize) token.Token {
+    return .{
+        .type = t.type,
+        .lexeme = t.lexeme,
+        .line = line,
+    };
 }
 
 const ScanErrorType = enum {

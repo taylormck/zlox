@@ -6,6 +6,8 @@ const Token = token.Token;
 const TokenType = token.TokenType;
 const TokenStream = @import("../stream.zig").TokenStream;
 
+const Result = @import("../Result.zig").Result;
+
 const expression = @import("expression.zig");
 const Expression = expression.Expression;
 const ExpressionType = expression.ExpressionType;
@@ -13,151 +15,271 @@ const ExpressionType = expression.ExpressionType;
 const Literal = @import("Literal.zig").Literal;
 const Operator = @import("Operator.zig").Operator;
 
-const ParseTokensResults = struct {
-    expression: Expression,
-    errors: []ParserError,
-};
-
-const ParserError = error{
+const ParserErrorType = error{
     UnexpectedToken,
+    UnexpectedError,
 };
 
-pub fn parse_tokens(tokens: []const Token) !?Expression {
+const ParserError = struct {
+    err: ParserErrorType,
+    token: Token,
+
+    pub fn format(
+        self: *const @This(),
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+
+        switch (self.err) {
+            error.UnexpectedToken => {
+                try writer.print(
+                    "[line {d}] Error at '{s}': Expect expression.",
+                    .{ self.token.line, self.token.lexeme },
+                );
+            },
+            error.UnexpectedError => {
+                try writer.print("Unexpected error occurred.", .{});
+            },
+        }
+    }
+};
+
+const ParserResult = Result(Expression, ParserError);
+const ParseResult = Result(Expression, []ParserError);
+
+pub fn parse(tokens: []const Token) !ParseResult {
     var stream = TokenStream.new(tokens);
 
-    return parse_expression(&stream);
+    if (parse_expression(&stream)) |result| {
+        return switch (result) {
+            .ok => |expr| .{
+                .ok = expr,
+            },
+            .err => |err| {
+                var errors = ArrayList(ParserError).init(std.heap.page_allocator);
+                try errors.append(err);
+
+                return .{ .err = errors.items };
+            },
+        };
+    } else |err| {
+        return err;
+    }
 }
 
-fn parse_expression(stream: *TokenStream) !?Expression {
+fn parse_expression(stream: *TokenStream) !ParserResult {
     return parse_equality(stream);
 }
 
-fn parse_equality(stream: *TokenStream) !?Expression {
-    var lhs = try parse_comparison(stream) orelse return null;
+fn parse_equality(stream: *TokenStream) !ParserResult {
+    const result = try parse_comparison(stream);
 
-    while (match(stream, &.{ .EQUAL_EQUAL, .BANG_EQUAL })) {
-        const op = try stream.next();
-        const rhs = try parse_comparison(stream) orelse return error.UnexpectedToken;
-        var children = ArrayList(Expression).init(std.heap.page_allocator);
-        try children.append(lhs);
-        try children.append(rhs);
+    switch (result) {
+        .ok => |expr| {
+            var lhs = expr;
 
-        const equality_type: Operator = switch (op.type) {
-            .EQUAL_EQUAL => .equal,
-            .BANG_EQUAL => .not_equal,
-            else => return ParserError.UnexpectedToken,
-        };
+            while (match(stream, &.{ .EQUAL_EQUAL, .BANG_EQUAL })) {
+                const op = stream.next() catch |err| return ParserError{
+                    .err = err,
+                    .token = lhs,
+                };
 
-        lhs = .{
-            .type = .{ .equality = equality_type },
-            .children = children,
-        };
+                const right_result = try parse_comparison(stream);
+
+                switch (right_result) {
+                    .ok => |rhs| {
+                        var children = ArrayList(Expression).init(std.heap.page_allocator);
+                        try children.append(lhs);
+                        try children.append(rhs);
+
+                        const equality_type: Operator = switch (op.type) {
+                            .EQUAL_EQUAL => .equal,
+                            .BANG_EQUAL => .not_equal,
+                            else => return .{ .err = ParserError{
+                                .err = error.UnexpectedToken,
+                                .token = op,
+                            } },
+                        };
+
+                        lhs = .{
+                            .type = .{ .equality = equality_type },
+                            .children = children,
+                        };
+                    },
+                    .err => return right_result,
+                }
+            }
+
+            return .{ .ok = lhs };
+        },
+        .err => return result,
     }
-
-    return lhs;
 }
 
-fn parse_comparison(stream: *TokenStream) !?Expression {
-    var lhs = try parse_term(stream) orelse return null;
+fn parse_comparison(stream: *TokenStream) !ParserResult {
+    const result = try parse_term(stream);
 
-    while (match(stream, &.{ .LESS, .LESS_EQUAL, .GREATER, .GREATER_EQUAL })) {
-        const op = try stream.next();
-        const rhs = try parse_term(stream) orelse return error.UnexpectedToken;
-        var children = ArrayList(Expression).init(std.heap.page_allocator);
-        try children.append(lhs);
-        try children.append(rhs);
+    switch (result) {
+        .ok => |expr| {
+            var lhs = expr;
 
-        const comparison_type: Operator = switch (op.type) {
-            .LESS => .less,
-            .LESS_EQUAL => .less_equal,
-            .GREATER => .greater,
-            .GREATER_EQUAL => .greater_equal,
-            else => return ParserError.UnexpectedToken,
-        };
+            while (match(stream, &.{ .LESS, .LESS_EQUAL, .GREATER, .GREATER_EQUAL })) {
+                const op = try stream.next();
 
-        lhs = .{
-            .type = .{ .comparison = comparison_type },
-            .children = children,
-        };
+                const right_result = try parse_term(stream);
+
+                switch (right_result) {
+                    .ok => |rhs| {
+                        var children = ArrayList(Expression).init(std.heap.page_allocator);
+                        try children.append(lhs);
+                        try children.append(rhs);
+
+                        const comparison_type: Operator = switch (op.type) {
+                            .LESS => .less,
+                            .LESS_EQUAL => .less_equal,
+                            .GREATER => .greater,
+                            .GREATER_EQUAL => .greater_equal,
+                            else => return .{ .err = ParserError{
+                                .err = error.UnexpectedToken,
+                                .token = op,
+                            } },
+                        };
+
+                        lhs = .{
+                            .type = .{ .comparison = comparison_type },
+                            .children = children,
+                        };
+                    },
+                    .err => return right_result,
+                }
+            }
+
+            return .{ .ok = lhs };
+        },
+        .err => return result,
     }
-
-    return lhs;
 }
 
-fn parse_term(stream: *TokenStream) !?Expression {
-    var lhs = try parse_factor(stream) orelse return null;
+fn parse_term(stream: *TokenStream) !ParserResult {
+    const result = try parse_factor(stream);
 
-    while (match(stream, &.{ .PLUS, .MINUS })) {
-        const op = try stream.next();
-        const rhs = try parse_factor(stream) orelse return error.UnexpectedToken;
-        var children = ArrayList(Expression).init(std.heap.page_allocator);
-        try children.append(lhs);
-        try children.append(rhs);
+    switch (result) {
+        .ok => |expr| {
+            var lhs = expr;
 
-        const term_type: Operator = switch (op.type) {
-            .PLUS => .add,
-            .MINUS => .subtract,
-            else => return ParserError.UnexpectedToken,
-        };
+            while (match(stream, &.{ .PLUS, .MINUS })) {
+                const op = try stream.next();
 
-        lhs = .{
-            .type = .{ .term = term_type },
-            .children = children,
-        };
+                const right_result = try parse_factor(stream);
+
+                switch (right_result) {
+                    .ok => |rhs| {
+                        var children = ArrayList(Expression).init(std.heap.page_allocator);
+                        try children.append(lhs);
+                        try children.append(rhs);
+
+                        const term_type: Operator = switch (op.type) {
+                            .PLUS => .add,
+                            .MINUS => .subtract,
+                            else => return .{ .err = ParserError{
+                                .err = error.UnexpectedToken,
+                                .token = op,
+                            } },
+                        };
+
+                        lhs = .{
+                            .type = .{ .term = term_type },
+                            .children = children,
+                        };
+                    },
+                    .err => return right_result,
+                }
+            }
+
+            return .{ .ok = lhs };
+        },
+        .err => return result,
     }
-
-    return lhs;
 }
 
-fn parse_factor(stream: *TokenStream) !?Expression {
-    var lhs = try parse_unary(stream) orelse return null;
+fn parse_factor(stream: *TokenStream) !ParserResult {
+    const result = try parse_unary(stream);
 
-    while (match(stream, &.{ .STAR, .SLASH })) {
-        const op = try stream.next();
-        const rhs = try parse_unary(stream) orelse return error.UnexpectedToken;
-        var children = ArrayList(Expression).init(std.heap.page_allocator);
-        try children.append(lhs);
-        try children.append(rhs);
+    switch (result) {
+        .ok => |expr| {
+            var lhs = expr;
 
-        const factor_type: Operator = switch (op.type) {
-            .STAR => .multiply,
-            .SLASH => .divide,
-            else => return ParserError.UnexpectedToken,
-        };
+            while (match(stream, &.{ .STAR, .SLASH })) {
+                const op = try stream.next();
 
-        lhs = .{
-            .type = .{ .factor = factor_type },
-            .children = children,
-        };
+                const right_result = try parse_unary(stream);
+
+                switch (right_result) {
+                    .ok => |rhs| {
+                        var children = ArrayList(Expression).init(std.heap.page_allocator);
+                        try children.append(lhs);
+                        try children.append(rhs);
+
+                        const factor_type: Operator = switch (op.type) {
+                            .STAR => .multiply,
+                            .SLASH => .divide,
+                            else => return .{ .err = ParserError{
+                                .err = error.UnexpectedToken,
+                                .token = op,
+                            } },
+                        };
+
+                        lhs = .{
+                            .type = .{ .factor = factor_type },
+                            .children = children,
+                        };
+                    },
+                    .err => return right_result,
+                }
+            }
+
+            return .{ .ok = lhs };
+        },
+        .err => return result,
     }
-
-    return lhs;
 }
 
-fn parse_unary(stream: *TokenStream) !?Expression {
+fn parse_unary(stream: *TokenStream) !ParserResult {
     if (match(stream, &.{ .MINUS, .BANG })) {
         const op = try stream.next();
 
-        const child = try parse_unary(stream) orelse return ParserError.UnexpectedToken;
-        var children = ArrayList(Expression).init(std.heap.page_allocator);
-        try children.append(child);
+        const right_result = try parse_unary(stream);
 
-        const unary_type: Operator = switch (op.type) {
-            .MINUS => .minus,
-            .BANG => .negate,
-            else => return ParserError.UnexpectedToken,
-        };
+        switch (right_result) {
+            .ok => |expr| {
+                var children = ArrayList(Expression).init(std.heap.page_allocator);
+                try children.append(expr);
 
-        return .{
-            .type = .{ .unary = unary_type },
-            .children = children,
-        };
+                const unary_type: Operator = switch (op.type) {
+                    .MINUS => .minus,
+                    .BANG => .negate,
+                    else => return .{ .err = ParserError{
+                        .err = error.UnexpectedToken,
+                        .token = op,
+                    } },
+                };
+
+                return .{ .ok = .{
+                    .type = .{ .unary = unary_type },
+                    .children = children,
+                } };
+            },
+            .err => return right_result,
+        }
     }
 
     return parse_primary(stream);
 }
 
-fn parse_primary(stream: *TokenStream) (ParserError || std.mem.Allocator.Error)!?Expression {
+fn parse_primary(stream: *TokenStream) !ParserResult {
     const current_token = try stream.next();
 
     const literal_type: Literal = switch (current_token.type) {
@@ -167,45 +289,49 @@ fn parse_primary(stream: *TokenStream) (ParserError || std.mem.Allocator.Error)!
         .TRUE => .{ .bool = true },
         .FALSE => .{ .bool = false },
         .NUMBER => .{
-            .number = std.fmt.parseFloat(f64, current_token.lexeme) catch unreachable,
+            .number = std.fmt.parseFloat(f64, current_token.lexeme) catch return .{
+                .err = ParserError{
+                    .err = error.UnexpectedToken,
+                    .token = current_token,
+                },
+            },
         },
         .STRING => .{ .string = current_token.literal },
         .IDENTIFIER => .{ .identifier = current_token.lexeme },
         .LEFT_PAREN => return parse_group(stream),
-        else => return ParserError.UnexpectedToken,
+        else => return .{ .err = ParserError{
+            .err = error.UnexpectedToken,
+            .token = current_token,
+        } },
     };
 
-    return .{
+    return .{ .ok = .{
         .type = .{ .literal = literal_type },
-    };
+    } };
 }
 
-fn parse_group(stream: *TokenStream) !?Expression {
-    var expression_list = ArrayList(Expression).init(std.heap.page_allocator);
+fn parse_group(stream: *TokenStream) (std.mem.Allocator.Error)!ParserResult {
+    const result = try parse_expression(stream);
 
-    while (!stream.at_end()) {
-        const next_token = try stream.peek();
+    switch (result) {
+        .ok => |expr| {
+            if (consume(stream, .RIGHT_PAREN) catch false) {
+                var expression_list = ArrayList(Expression).init(std.heap.page_allocator);
+                try expression_list.append(expr);
 
-        switch (next_token.type) {
-            .RIGHT_PAREN => {
-                try stream.advance();
-                break;
-            },
-            else => {
-                const next_exp = try parse_expression(stream) orelse unreachable;
-                try expression_list.append(next_exp);
-            },
-        }
-
-        if (next_token.type != .RIGHT_PAREN) {
-            // TODO: report parser error
-        }
+                return .{ .ok = .{
+                    .type = .grouping,
+                    .children = expression_list,
+                } };
+            }
+        },
+        else => {},
     }
 
-    return .{
-        .type = .grouping,
-        .children = expression_list,
-    };
+    return .{ .err = ParserError{
+        .token = try stream.previous(),
+        .err = error.UnexpectedToken,
+    } };
 }
 
 fn match(stream: *TokenStream, expected: []const token.TokenType) bool {
@@ -222,4 +348,13 @@ fn match(stream: *TokenStream, expected: []const token.TokenType) bool {
     }
 
     return false;
+}
+
+fn consume(stream: *TokenStream, expected: token.TokenType) !bool {
+    if (match(stream, &.{expected})) {
+        _ = try stream.next();
+        return true;
+    }
+
+    return error.UnexpectedToken;
 }
