@@ -13,6 +13,22 @@ pub fn evaluate(expr: Expression) !Value {
         .grouping => {
             return evaluate(expr.children.items[0]);
         },
+        .unary => |unary| {
+            const rhs = try evaluate(expr.children.items[0]);
+
+            return switch (unary) {
+                .negate => switch (rhs) {
+                    .number => |num| .{ .bool = num == 0 },
+                    .bool => |b| .{ .bool = !b },
+                    else => @panic("Unsupported operand for negate operator"),
+                },
+                .minus => switch (rhs) {
+                    .number => |num| .{ .number = -num },
+                    else => @panic("Unsupported operand to unary minus operator"),
+                },
+                else => @panic("Unsupported unary operator"),
+            };
+        },
         .term => |term| {
             const lhs = try evaluate(expr.children.items[0]);
             const rhs = try evaluate(expr.children.items[1]);
@@ -20,7 +36,7 @@ pub fn evaluate(expr: Expression) !Value {
             const value = switch (term) {
                 .add => lhs.number + rhs.number,
                 .subtract => lhs.number - rhs.number,
-                else => @panic("Unsupported operator type"),
+                else => @panic("Unsupported term operator"),
             };
 
             return .{ .number = value };
