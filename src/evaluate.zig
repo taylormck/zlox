@@ -7,6 +7,7 @@ pub fn evaluate(expr: Expression) !Value {
             .number => |n| return .{ .number = n },
             .bool => |b| return .{ .bool = b },
             .nil => return .nil,
+            .string => |s| return .{ .string = s },
             else => @panic("Unsupported literal type"),
         },
         .term => |term| {
@@ -29,6 +30,7 @@ const Value = union(enum) {
     number: f64,
     bool: bool,
     nil,
+    string: []const u8,
 
     pub fn format(
         self: @This(),
@@ -43,6 +45,7 @@ const Value = union(enum) {
             .number => |num| try writer.print("{d}", .{num}),
             .bool => |b| try writer.print("{}", .{b}),
             .nil => try writer.print("nil", .{}),
+            .string => |s| try writer.print("{s}", .{s}),
         }
     }
 };
