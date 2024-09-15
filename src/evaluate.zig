@@ -1,13 +1,14 @@
 const std = @import("std");
 const Expression = @import("parser/expression.zig").Expression;
+const Result = @import("Result.zig").Result;
 
-pub fn evaluate(expr: Expression) !Value {
+pub fn evaluate(expr: Expression) !EvaluateResult {
     switch (expr.type) {
         .literal => |literal| switch (literal) {
-            .number => |n| return .{ .number = n },
-            .bool => |b| return .{ .bool = b },
-            .nil => return .nil,
-            .string => |s| return .{ .string = s },
+            .number => |n| return .{ .ok = .{ .number = n } },
+            .bool => |b| return .{ .ok = .{ .bool = b } },
+            .nil => return .{ .ok = .nil },
+            .string => |s| return .{ .ok = .{ .string = s } },
             else => @panic("Unsupported literal type"),
         },
         .grouping => {
@@ -16,127 +17,195 @@ pub fn evaluate(expr: Expression) !Value {
         .unary => |unary| {
             const rhs = try evaluate(expr.children.items[0]);
 
-            return switch (unary) {
-                .negate => switch (rhs) {
-                    .number => |num| .{ .bool = num == 0 },
-                    .bool => |b| .{ .bool = !b },
-                    .nil => .{ .bool = true },
-                    else => @panic("Unsupported operand for negate operator"),
+            switch (rhs) {
+                .ok => |rhs_ok| {
+                    return switch (unary) {
+                        .negate => switch (rhs_ok) {
+                            .number => |num| .{ .ok = .{ .bool = num == 0 } },
+                            .bool => |b| .{ .ok = .{ .bool = !b } },
+                            .nil => .{ .ok = .{ .bool = true } },
+                            else => @panic("Unsupported operand for negate operator"),
+                        },
+                        .minus => switch (rhs_ok) {
+                            .number => |num| .{ .ok = .{ .number = -num } },
+                            else => .{ .err = .{
+                                .type = .{ .InvalidOperand = "number" },
+                            } },
+                        },
+                        else => @panic("Unsupported unary operator"),
+                    };
                 },
-                .minus => switch (rhs) {
-                    .number => |num| .{ .number = -num },
-                    else => @panic("Unsupported operand to unary minus operator"),
+                .err => {
+                    return rhs;
                 },
-                else => @panic("Unsupported unary operator"),
-            };
+            }
         },
         .factor => |factor| {
             const lhs = try evaluate(expr.children.items[0]);
-            const rhs = try evaluate(expr.children.items[1]);
 
-            var value: f64 = 0;
+            switch (lhs) {
+                .ok => |lhs_ok| {
+                    const rhs = try evaluate(expr.children.items[1]);
 
-            switch (factor) {
-                .multiply => {
-                    if (lhs.is_number() and rhs.is_number()) {
-                        value = lhs.number * rhs.number;
-                    } else {
-                        @panic("Unsupported operands to multiply operator");
+                    switch (rhs) {
+                        .ok => |rhs_ok| {
+                            var value: f64 = 0;
+
+                            switch (factor) {
+                                .multiply => {
+                                    if (lhs_ok.is_number() and rhs_ok.is_number()) {
+                                        value = lhs_ok.number * rhs_ok.number;
+                                    } else {
+                                        return .{ .err = .{ .type = .{ .InvalidOperand = "number" } } };
+                                    }
+                                },
+
+                                .divide => {
+                                    if (lhs_ok.is_number() and rhs_ok.is_number()) {
+                                        value = lhs_ok.number / rhs_ok.number;
+                                    } else {
+                                        return .{ .err = .{ .type = .{ .InvalidOperand = "number" } } };
+                                    }
+                                },
+                                else => @panic("Unsupported term operator"),
+                            }
+
+                            return .{ .ok = .{ .number = value } };
+                        },
+                        .err => {
+                            return rhs;
+                        },
                     }
                 },
-
-                .divide => {
-                    if (lhs.is_number() and rhs.is_number()) {
-                        value = lhs.number / rhs.number;
-                    } else {
-                        @panic("Unsupported operands to divide operator");
-                    }
+                .err => {
+                    return lhs;
                 },
-                else => @panic("Unsupported term operator"),
             }
-
-            return .{ .number = value };
         },
         .term => |term| {
             const lhs = try evaluate(expr.children.items[0]);
-            const rhs = try evaluate(expr.children.items[1]);
 
-            var value: f64 = 0;
-            switch (term) {
-                .add => {
-                    if (lhs.is_string() and rhs.is_string()) {
-                        return .{
-                            .string = try std.fmt.allocPrint(
-                                std.heap.page_allocator,
-                                "{s}{s}",
-                                .{ lhs.string, rhs.string },
-                            ),
-                        };
-                    } else if (lhs.is_number() and rhs.is_number()) {
-                        value = lhs.number + rhs.number;
-                    } else {
-                        @panic("Unsupported operands to add operator");
+            switch (lhs) {
+                .ok => |lhs_ok| {
+                    const rhs = try evaluate(expr.children.items[1]);
+                    switch (rhs) {
+                        .ok => |rhs_ok| {
+                            var value: f64 = 0;
+                            switch (term) {
+                                .add => {
+                                    if (lhs_ok.is_string() and rhs_ok.is_string()) {
+                                        return .{ .ok = .{
+                                            .string = try std.fmt.allocPrint(
+                                                std.heap.page_allocator,
+                                                "{s}{s}",
+                                                .{ lhs_ok.string, rhs_ok.string },
+                                            ),
+                                        } };
+                                    } else if (lhs_ok.is_number() and rhs_ok.is_number()) {
+                                        value = lhs_ok.number + rhs_ok.number;
+                                    } else {
+                                        @panic("Unsupported operands to add operator");
+                                    }
+                                },
+                                .subtract => {
+                                    if (lhs_ok.is_number() and rhs_ok.is_number()) {
+                                        value = lhs_ok.number - rhs_ok.number;
+                                    } else {
+                                        return .{ .err = .{ .type = .{ .InvalidOperand = "number" } } };
+                                    }
+                                },
+                                else => @panic("Unsupported term operator"),
+                            }
+
+                            return .{ .ok = .{ .number = value } };
+                        },
+                        .err => {
+                            return rhs;
+                        },
                     }
                 },
-                .subtract => {
-                    if (lhs.is_number() and rhs.is_number()) {
-                        value = lhs.number - rhs.number;
-                    } else {
-                        @panic("Unsupported operands to subtract operator");
-                    }
+                .err => {
+                    return lhs;
                 },
-                else => @panic("Unsupported term operator"),
             }
-
-            return .{ .number = value };
         },
         .comparison => |comp| {
             const lhs = try evaluate(expr.children.items[0]);
-            const rhs = try evaluate(expr.children.items[1]);
 
-            if (!lhs.is_number() or !rhs.is_number()) {
-                @panic("Unsupported operands to compare operator");
+            switch (lhs) {
+                .ok => |lhs_ok| {
+                    const rhs = try evaluate(expr.children.items[1]);
+
+                    switch (rhs) {
+                        .ok => |rhs_ok| {
+                            if (!lhs_ok.is_number() or !rhs_ok.is_number()) {
+                                return .{ .err = .{ .type = .{ .InvalidOperand = "number" } } };
+                            }
+
+                            const value = switch (comp) {
+                                .less => lhs_ok.number < rhs_ok.number,
+                                .less_equal => lhs_ok.number <= rhs_ok.number,
+                                .greater => lhs_ok.number > rhs_ok.number,
+                                .greater_equal => lhs_ok.number >= rhs_ok.number,
+                                else => @panic("Unsupported compare operator"),
+                            };
+
+                            return .{ .ok = .{ .bool = value } };
+                        },
+                        .err => {
+                            return rhs;
+                        },
+                    }
+                },
+                .err => {
+                    return lhs;
+                },
             }
-
-            const value = switch (comp) {
-                .less => lhs.number < rhs.number,
-                .less_equal => lhs.number <= rhs.number,
-                .greater => lhs.number > rhs.number,
-                .greater_equal => lhs.number >= rhs.number,
-                else => @panic("Unsupported compare operator"),
-            };
-
-            return .{ .bool = value };
         },
         .equality => |eql| {
             const lhs = try evaluate(expr.children.items[0]);
-            const rhs = try evaluate(expr.children.items[1]);
 
-            if (!lhs.is_same_type(rhs)) {
-                return switch (eql) {
-                    .equal => .{ .bool = false },
-                    .not_equal => .{ .bool = true },
-                    else => @panic("Unsupported compare operator"),
-                };
+            switch (lhs) {
+                .ok => |lhs_ok| {
+                    const rhs = try evaluate(expr.children.items[1]);
+
+                    switch (rhs) {
+                        .ok => |rhs_ok| {
+                            if (!lhs_ok.is_same_type(rhs_ok)) {
+                                return switch (eql) {
+                                    .equal => .{ .ok = .{ .bool = false } },
+                                    .not_equal => .{ .ok = .{ .bool = true } },
+                                    else => @panic("Unsupported compare operator"),
+                                };
+                            }
+
+                            const value = switch (eql) {
+                                .equal => switch (lhs_ok) {
+                                    .number => lhs_ok.number == rhs_ok.number,
+                                    .bool => lhs_ok.bool == rhs_ok.bool,
+                                    .nil => true,
+                                    .string => std.mem.eql(u8, lhs_ok.string, rhs_ok.string),
+                                },
+                                .not_equal => switch (lhs_ok) {
+                                    .number => lhs_ok.number != rhs_ok.number,
+                                    .bool => lhs_ok.bool != rhs_ok.bool,
+                                    .nil => false,
+                                    .string => !std.mem.eql(u8, lhs_ok.string, rhs_ok.string),
+                                },
+                                else => @panic("Unsupported compare operator"),
+                            };
+
+                            return .{ .ok = .{ .bool = value } };
+                        },
+                        .err => {
+                            return rhs;
+                        },
+                    }
+                },
+                .err => {
+                    return lhs;
+                },
             }
-
-            const value = switch (eql) {
-                .equal => switch (lhs) {
-                    .number => lhs.number == rhs.number,
-                    .bool => lhs.bool == rhs.bool,
-                    .nil => true,
-                    .string => std.mem.eql(u8, lhs.string, rhs.string),
-                },
-                .not_equal => switch (lhs) {
-                    .number => lhs.number != rhs.number,
-                    .bool => lhs.bool != rhs.bool,
-                    .nil => false,
-                    .string => !std.mem.eql(u8, lhs.string, rhs.string),
-                },
-                else => @panic("Unsupported compare operator"),
-            };
-
-            return .{ .bool = value };
         },
     }
 }
@@ -199,4 +268,27 @@ const Value = union(enum) {
         };
     }
 };
+
+const EvaluateErrorType = union(enum) {
+    InvalidOperand: []const u8,
+};
+
+const EvaluateError = struct {
+    type: EvaluateErrorType,
+
+    pub fn format(
+        self: @This(),
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        switch (self.type) {
+            .InvalidOperand => |needed_type| {
+                try writer.print("Operand must be a {s}.\n", .{needed_type});
+            },
+        }
+    }
+};
+
+const EvaluateResult = Result(Value, EvaluateError);
 

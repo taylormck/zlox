@@ -105,8 +105,13 @@ fn evaluate(filename: []const u8, print: bool) !void {
     _ = print;
     const expr = try parse(filename, false);
 
-    const result = try evaluater.evaluate(expr);
-    try std.io.getStdOut().writer().print("{s}\n", .{result});
+    switch (try evaluater.evaluate(expr)) {
+        .ok => |result| try std.io.getStdOut().writer().print("{s}\n", .{result}),
+        .err => |err| {
+            try std.io.getStdErr().writer().print("{s}\n", .{err});
+            std.process.exit(70);
+        },
+    }
 }
 
 test {}
