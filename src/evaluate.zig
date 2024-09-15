@@ -10,6 +10,9 @@ pub fn evaluate(expr: Expression) !Value {
             .string => |s| return .{ .string = s },
             else => @panic("Unsupported literal type"),
         },
+        .grouping => {
+            return evaluate(expr.children.items[0]);
+        },
         .term => |term| {
             const lhs = try evaluate(expr.children.items[0]);
             const rhs = try evaluate(expr.children.items[1]);
