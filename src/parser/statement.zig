@@ -25,7 +25,8 @@ const consume = parser.consume;
 const ParseError = parser.ParseError;
 
 const StatementType = union(enum) {
-    print: Value,
+    print: Expression,
+    expression: Expression,
 };
 
 pub const Statement = struct {
@@ -33,8 +34,23 @@ pub const Statement = struct {
 
     pub fn eval(self: @This()) !void {
         switch (self.type) {
-            .print => |val| {
-                try std.io.getStdOut().writer().print("{s}\n", .{val});
+            .print => |expr| {
+                switch (try evaluate.evaluate(expr)) {
+                    .ok => |val| {
+                        try std.io.getStdOut().writer().print("{s}\n", .{val});
+                    },
+                    .err => {
+                        // TODO: throw a runtime exception
+                    },
+                }
+            },
+            .expression => |expr| {
+                switch (try evaluate.evaluate(expr)) {
+                    .ok => {},
+                    .err => {
+                        // TODO: throw a runtime exception
+                    },
+                }
             },
         }
     }
@@ -47,6 +63,7 @@ pub const Statement = struct {
     ) !void {
         switch (self.type) {
             .print => |expr| try writer.print("print {s};\n", .{expr}),
+            .expression => |expr| try writer.print("{s};\n", .{expr}),
         }
     }
 };
@@ -59,7 +76,7 @@ pub fn parse_statement(stream: *TokenStream) !ParseStatementGrammarResult {
         return try parse_print(stream);
     }
 
-    @panic("Unsupported statement type");
+    return try parse_expression_stmt(stream);
 }
 
 fn parse_print(stream: *TokenStream) !ParseStatementGrammarResult {
@@ -70,15 +87,31 @@ fn parse_print(stream: *TokenStream) !ParseStatementGrammarResult {
     switch (result) {
         .ok => |expr| {
             if (try consume(stream, .SEMICOLON)) {
-                return switch (try evaluate.evaluate(expr)) {
-                    .ok => |val| .{ .ok = .{
-                        .type = .{ .print = val },
-                    } },
-                    .err => .{ .err = .{
-                        .type = error.UnexpectedError,
-                        .token = try stream.previous(),
-                    } },
-                };
+                return .{ .ok = .{
+                    .type = .{ .print = expr },
+                } };
+            } else {
+                return .{ .err = .{
+                    .type = error.UnexpectedToken,
+                    .token = try stream.previous(),
+                } };
+            }
+        },
+        .err => |err| {
+            return .{ .err = err };
+        },
+    }
+}
+
+fn parse_expression_stmt(stream: *TokenStream) !ParseStatementGrammarResult {
+    const result = try parse_expression(stream);
+
+    switch (result) {
+        .ok => |expr| {
+            if (try consume(stream, .SEMICOLON)) {
+                return .{ .ok = .{
+                    .type = .{ .expression = expr },
+                } };
             } else {
                 return .{ .err = .{
                     .type = error.UnexpectedToken,
