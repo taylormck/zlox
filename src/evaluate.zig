@@ -56,7 +56,7 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
                                     if (lhs_ok.is_number() and rhs_ok.is_number()) {
                                         value = lhs_ok.number * rhs_ok.number;
                                     } else {
-                                        return .{ .err = .{ .type = .{ .InvalidOperand = "number" } } };
+                                        return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
                                     }
                                 },
 
@@ -64,7 +64,7 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
                                     if (lhs_ok.is_number() and rhs_ok.is_number()) {
                                         value = lhs_ok.number / rhs_ok.number;
                                     } else {
-                                        return .{ .err = .{ .type = .{ .InvalidOperand = "number" } } };
+                                        return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
                                     }
                                 },
                                 else => @panic("Unsupported term operator"),
@@ -104,17 +104,19 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
                                     } else if (lhs_ok.is_number() and rhs_ok.is_number()) {
                                         value = lhs_ok.number + rhs_ok.number;
                                     } else {
-                                        @panic("Unsupported operands to add operator");
+                                        return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
                                     }
                                 },
                                 .subtract => {
                                     if (lhs_ok.is_number() and rhs_ok.is_number()) {
                                         value = lhs_ok.number - rhs_ok.number;
                                     } else {
-                                        return .{ .err = .{ .type = .{ .InvalidOperand = "number" } } };
+                                        return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
                                     }
                                 },
-                                else => @panic("Unsupported term operator"),
+                                else => {
+                                    return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
+                                },
                             }
 
                             return .{ .ok = .{ .number = value } };
@@ -139,7 +141,7 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
                     switch (rhs) {
                         .ok => |rhs_ok| {
                             if (!lhs_ok.is_number() or !rhs_ok.is_number()) {
-                                return .{ .err = .{ .type = .{ .InvalidOperand = "number" } } };
+                                return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
                             }
 
                             const value = switch (comp) {
@@ -271,6 +273,7 @@ const Value = union(enum) {
 
 const EvaluateErrorType = union(enum) {
     InvalidOperand: []const u8,
+    InvalidOperands: []const u8,
 };
 
 const EvaluateError = struct {
@@ -285,6 +288,9 @@ const EvaluateError = struct {
         switch (self.type) {
             .InvalidOperand => |needed_type| {
                 try writer.print("Operand must be a {s}.\n", .{needed_type});
+            },
+            .InvalidOperands => |needed_type| {
+                try writer.print("Operands must be {s}.\n", .{needed_type});
             },
         }
     }
