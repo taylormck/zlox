@@ -78,8 +78,10 @@ pub fn parse(filename: []const u8) !void {
     if (parser.parse(tokens)) |result| {
         switch (result) {
             .ok => |expr| try std.io.getStdOut().writer().print("{s}\n", .{expr}),
-            .err => |err| {
-                try std.io.getStdErr().writer().print("{s}\n", .{err});
+            .err => |errors| {
+                for (errors) |err| {
+                    try std.io.getStdErr().writer().print("{s}\n", .{err});
+                }
                 std.process.exit(65);
             },
         }
