@@ -20,6 +20,7 @@ pub fn evaluate(expr: Expression) !Value {
                 .negate => switch (rhs) {
                     .number => |num| .{ .bool = num == 0 },
                     .bool => |b| .{ .bool = !b },
+                    .nil => .{ .bool = true },
                     else => @panic("Unsupported operand for negate operator"),
                 },
                 .minus => switch (rhs) {
@@ -68,3 +69,4 @@ const Value = union(enum) {
         }
     }
 };
+
