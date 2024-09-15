@@ -76,51 +76,58 @@ pub fn parse_statement(stream: *TokenStream) !ParseStatementGrammarResult {
         return try parse_print(stream);
     }
 
-    return try parse_expression_stmt(stream);
+    return try parse_expression_statement(stream);
 }
 
 fn parse_print(stream: *TokenStream) !ParseStatementGrammarResult {
-    _ = try consume(stream, .PRINT);
+    if (consume(stream, .PRINT) catch false) {
+        const result = try parse_expression(stream);
 
-    const result = try parse_expression(stream);
-
-    switch (result) {
-        .ok => |expr| {
-            if (try consume(stream, .SEMICOLON)) {
-                return .{ .ok = .{
-                    .type = .{ .print = expr },
-                } };
-            } else {
-                return .{ .err = .{
-                    .type = error.UnexpectedToken,
-                    .token = try stream.previous(),
-                } };
-            }
-        },
-        .err => |err| {
-            return .{ .err = err };
-        },
+        switch (result) {
+            .ok => |expr| {
+                if (consume(stream, .SEMICOLON) catch false) {
+                    return .{ .ok = .{
+                        .type = .{ .print = expr },
+                    } };
+                } else {
+                    return .{ .err = .{
+                        .type = error.UnexpectedToken,
+                        .token = try stream.previous(),
+                    } };
+                }
+            },
+            .err => |err| {
+                return .{ .err = err };
+            },
+        }
+    } else {
+        return .{ .err = .{
+            .type = error.UnexpectedToken,
+            .token = try stream.previous(),
+        } };
     }
 }
 
-fn parse_expression_stmt(stream: *TokenStream) !ParseStatementGrammarResult {
-    const result = try parse_expression(stream);
-
-    switch (result) {
-        .ok => |expr| {
-            if (try consume(stream, .SEMICOLON)) {
-                return .{ .ok = .{
-                    .type = .{ .expression = expr },
-                } };
-            } else {
-                return .{ .err = .{
-                    .type = error.UnexpectedToken,
-                    .token = try stream.previous(),
-                } };
-            }
-        },
-        .err => |err| {
-            return .{ .err = err };
-        },
+fn parse_expression_statement(stream: *TokenStream) !ParseStatementGrammarResult {
+    if (parse_expression(stream)) |result| {
+        switch (result) {
+            .ok => |expr| {
+                if (consume(stream, .SEMICOLON) catch false) {
+                    return .{ .ok = .{
+                        .type = .{ .expression = expr },
+                    } };
+                } else {
+                    return .{ .err = .{
+                        .type = error.UnexpectedToken,
+                        .token = try stream.previous(),
+                    } };
+                }
+            },
+            .err => |err| {
+                return .{ .err = err };
+            },
+        }
+    } else |err| {
+        return err;
     }
 }
