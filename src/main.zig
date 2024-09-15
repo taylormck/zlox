@@ -107,30 +107,27 @@ fn parse(filename: []const u8, print: bool) !Statement {
 }
 
 fn evaluate(filename: []const u8, print: bool) !void {
-    _ = filename;
-    _ = print;
-    // const tokens = try tokenize(filename, false);
-    // var token_stream = TokenStream.new(tokens);
-    //
-    // if (expression.parse_expression(&token_stream)) |parse_result| {
-    //     switch (parse_result) {
-    //         .ok => |expr| {
-    //             switch (try evaluater.evaluate(expr)) {
-    //                 .ok => |result| if (print) {
-    //                     try std.io.getStdOut().writer().print("{s}\n", .{result});
-    //                 },
-    //                 .err => |err| {
-    //                     try std.io.getStdErr().writer().print("{s}\n", .{err});
-    //                     std.process.exit(70);
-    //                 },
-    //             }
-    //         },
-    //         .err => |err| {
-    //             try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
-    //             std.process.exit(70);
-    //         },
-    //     }
-    // }
+    const tokens = try tokenize(filename, false);
+    var token_stream = TokenStream.new(tokens);
+    const parse_result = try expression.parse_expression(&token_stream);
+
+    switch (parse_result) {
+        .ok => |expr| {
+            switch (try evaluater.evaluate(expr)) {
+                .ok => |result| if (print) {
+                    try std.io.getStdOut().writer().print("{s}\n", .{result});
+                },
+                .err => |err| {
+                    try std.io.getStdErr().writer().print("{s}\n", .{err});
+                    std.process.exit(70);
+                },
+            }
+        },
+        .err => |err| {
+            try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
+            std.process.exit(70);
+        },
+    }
 }
 
 fn run(filename: []const u8) !void {
