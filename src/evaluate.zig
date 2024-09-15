@@ -90,7 +90,50 @@ pub fn evaluate(expr: Expression) !Value {
 
             return .{ .number = value };
         },
-        else => @panic("Unsupported expression type"),
+        .comparison => |comp| {
+            const lhs = try evaluate(expr.children.items[0]);
+            const rhs = try evaluate(expr.children.items[1]);
+
+            if (!lhs.is_number() or !rhs.is_number()) {
+                @panic("Unsupported operands to compare operator");
+            }
+
+            const value = switch (comp) {
+                .less => lhs.number < rhs.number,
+                .less_equal => lhs.number <= rhs.number,
+                .greater => lhs.number > rhs.number,
+                .greater_equal => lhs.number >= rhs.number,
+                else => @panic("Unsupported compare operator"),
+            };
+
+            return .{ .bool = value };
+        },
+        .equality => |eql| {
+            const lhs = try evaluate(expr.children.items[0]);
+            const rhs = try evaluate(expr.children.items[1]);
+
+            if (!lhs.is_same_type(rhs)) {
+                @panic("Equality operands must be the same type");
+            }
+
+            const value = switch (eql) {
+                .equal => switch (lhs) {
+                    .number => lhs.number == rhs.number,
+                    .bool => lhs.bool == rhs.bool,
+                    .nil => true,
+                    .string => std.mem.eql(u8, lhs.string, rhs.string),
+                },
+                .not_equal => switch (lhs) {
+                    .number => lhs.number != rhs.number,
+                    .bool => lhs.bool != rhs.bool,
+                    .nil => false,
+                    .string => !std.mem.eql(u8, lhs.string, rhs.string),
+                },
+                else => @panic("Unsupported compare operator"),
+            };
+
+            return .{ .bool = value };
+        },
     }
 }
 
@@ -128,6 +171,27 @@ const Value = union(enum) {
         return switch (self) {
             .string => true,
             else => false,
+        };
+    }
+
+    fn is_same_type(self: @This(), other: @This()) bool {
+        return switch (self) {
+            .number => switch (other) {
+                .number => true,
+                else => false,
+            },
+            .bool => switch (other) {
+                .bool => true,
+                else => false,
+            },
+            .nil => switch (other) {
+                .nil => true,
+                else => false,
+            },
+            .string => switch (other) {
+                .string => true,
+                else => false,
+            },
         };
     }
 };
