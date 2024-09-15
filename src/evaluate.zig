@@ -34,11 +34,26 @@ pub fn evaluate(expr: Expression) !Value {
             const lhs = try evaluate(expr.children.items[0]);
             const rhs = try evaluate(expr.children.items[1]);
 
-            const value = switch (factor) {
-                .multiply => lhs.number * rhs.number,
-                .divide => lhs.number / rhs.number,
+            var value: f64 = 0;
+
+            switch (factor) {
+                .multiply => {
+                    if (lhs.is_number() and rhs.is_number()) {
+                        value = lhs.number * rhs.number;
+                    } else {
+                        @panic("Unsupported operands to multiply operator");
+                    }
+                },
+
+                .divide => {
+                    if (lhs.is_number() and rhs.is_number()) {
+                        value = lhs.number / rhs.number;
+                    } else {
+                        @panic("Unsupported operands to divide operator");
+                    }
+                },
                 else => @panic("Unsupported term operator"),
-            };
+            }
 
             return .{ .number = value };
         },
@@ -46,11 +61,32 @@ pub fn evaluate(expr: Expression) !Value {
             const lhs = try evaluate(expr.children.items[0]);
             const rhs = try evaluate(expr.children.items[1]);
 
-            const value = switch (term) {
-                .add => lhs.number + rhs.number,
-                .subtract => lhs.number - rhs.number,
+            var value: f64 = 0;
+            switch (term) {
+                .add => {
+                    if (lhs.is_string() and rhs.is_string()) {
+                        return .{
+                            .string = try std.fmt.allocPrint(
+                                std.heap.page_allocator,
+                                "{s}{s}",
+                                .{ lhs.string, rhs.string },
+                            ),
+                        };
+                    } else if (lhs.is_number() and rhs.is_number()) {
+                        value = lhs.number + rhs.number;
+                    } else {
+                        @panic("Unsupported operands to add operator");
+                    }
+                },
+                .subtract => {
+                    if (lhs.is_number() and rhs.is_number()) {
+                        value = lhs.number - rhs.number;
+                    } else {
+                        @panic("Unsupported operands to subtract operator");
+                    }
+                },
                 else => @panic("Unsupported term operator"),
-            };
+            }
 
             return .{ .number = value };
         },
@@ -80,5 +116,18 @@ const Value = union(enum) {
             .string => |s| try writer.print("{s}", .{s}),
         }
     }
-};
 
+    fn is_number(self: @This()) bool {
+        return switch (self) {
+            .number => true,
+            else => false,
+        };
+    }
+
+    fn is_string(self: @This()) bool {
+        return switch (self) {
+            .string => true,
+            else => false,
+        };
+    }
+};
