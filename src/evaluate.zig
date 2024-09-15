@@ -212,7 +212,7 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
     }
 }
 
-const Value = union(enum) {
+pub const Value = union(enum) {
     number: f64,
     bool: bool,
     nil,
@@ -297,4 +297,3 @@ const EvaluateError = struct {
 };
 
 const EvaluateResult = Result(Value, EvaluateError);
-
