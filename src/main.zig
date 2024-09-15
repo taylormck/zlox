@@ -1,23 +1,27 @@
 const std = @import("std");
 const Token = @import("token.zig").Token;
+const Expression = @import("parser/expression.zig").Expression;
 
 const scanner = @import("scanner.zig");
 const parser = @import("parser/parser.zig");
+const evaluater = @import("evaluate.zig");
 
 pub fn main() !void {
     const command = try parse_args();
     switch (command) {
         .tokenize => |filename| _ = try tokenize(filename, true),
-        .parse => |filename| try parse(filename),
+        .parse => |filename| _ = try parse(filename, true),
+        .evaluate => |filename| _ = try evaluate(filename, true),
     }
 }
 
 const Command = union(enum) {
     tokenize: []const u8,
     parse: []const u8,
+    evaluate: []const u8,
 };
 
-pub fn parse_args() !Command {
+fn parse_args() !Command {
     const args = try std.process.argsAlloc(std.heap.page_allocator);
 
     if (args.len < 3) {
@@ -38,12 +42,12 @@ pub fn parse_args() !Command {
     return error.InvalidCommand;
 }
 
-pub fn report_usage_error_and_quit() void {
+fn report_usage_error_and_quit() void {
     std.debug.print("Usage: ./zig-interpreter <tokenize|parse> <filename>\n", .{});
     std.process.exit(1);
 }
 
-pub fn tokenize(filename: []const u8, print: bool) ![]Token {
+fn tokenize(filename: []const u8, print: bool) ![]Token {
     const file_contents = try std.fs.cwd().readFileAlloc(
         std.heap.page_allocator,
         filename,
@@ -72,12 +76,18 @@ pub fn tokenize(filename: []const u8, print: bool) ![]Token {
     return tokens;
 }
 
-pub fn parse(filename: []const u8) !void {
+fn parse(filename: []const u8, print: bool) !Expression {
     const tokens = try tokenize(filename, false);
 
     if (parser.parse(tokens)) |result| {
         switch (result) {
-            .ok => |expr| try std.io.getStdOut().writer().print("{s}\n", .{expr}),
+            .ok => |expr| {
+                if (print) {
+                    try std.io.getStdOut().writer().print("{s}\n", .{expr});
+                }
+
+                return expr;
+            },
             .err => |errors| {
                 for (errors) |err| {
                     try std.io.getStdErr().writer().print("{s}\n", .{err});
@@ -89,6 +99,14 @@ pub fn parse(filename: []const u8) !void {
         try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
         std.process.exit(65);
     }
+}
+
+fn evaluate(filename: []const u8, print: bool) !void {
+    _ = print;
+    const expr = try parse(filename, false);
+
+    const result = try evaluater.evaluate(expr);
+    try std.io.getStdOut().writer().print("{s}\n", .{result});
 }
 
 test {}
