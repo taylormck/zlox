@@ -113,7 +113,11 @@ pub fn evaluate(expr: Expression) !Value {
             const rhs = try evaluate(expr.children.items[1]);
 
             if (!lhs.is_same_type(rhs)) {
-                @panic("Equality operands must be the same type");
+                return switch (eql) {
+                    .equal => .{ .bool = false },
+                    .not_equal => .{ .bool = true },
+                    else => @panic("Unsupported compare operator"),
+                };
             }
 
             const value = switch (eql) {
@@ -195,3 +199,4 @@ const Value = union(enum) {
         };
     }
 };
+
