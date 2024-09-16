@@ -143,26 +143,18 @@ fn parse_statements(filename: []const u8, print: bool) ![]Statement {
 }
 
 fn evaluate(filename: []const u8, print: bool) !void {
-    const tokens = try tokenize(filename, false);
-    var token_stream = TokenStream.new(tokens);
-    const parse_result = try expression.parse_expression(&token_stream);
+    const expressions = try parse_expressions(filename, false);
 
-    switch (parse_result) {
-        .ok => |expr| {
-            switch (try evaluater.evaluate(expr)) {
-                .ok => |result| if (print) {
-                    try std.io.getStdOut().writer().print("{s}\n", .{result});
-                },
-                .err => |err| {
-                    try std.io.getStdErr().writer().print("{s}\n", .{err});
-                    std.process.exit(70);
-                },
-            }
-        },
-        .err => |err| {
-            try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
-            std.process.exit(70);
-        },
+    for (expressions) |expr| {
+        switch (try evaluater.evaluate(expr)) {
+            .ok => |result| if (print) {
+                try std.io.getStdOut().writer().print("{s}\n", .{result});
+            },
+            .err => |err| {
+                try std.io.getStdErr().writer().print("{s}\n", .{err});
+                std.process.exit(70);
+            },
+        }
     }
 }
 
