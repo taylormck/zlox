@@ -16,7 +16,7 @@ pub fn main() !void {
     switch (command) {
         .tokenize => |filename| _ = try tokenize(filename, true),
         .parse => |filename| _ = try parse(filename, true),
-        .parse_statements => |filename| try parse_statements(filename, true),
+        .parse_statements => |filename| _ = try parse_statements(filename, true),
         .evaluate => |filename| _ = try evaluate(filename, true),
         .run => |filename| _ = try run(filename),
     }
@@ -115,8 +115,9 @@ fn parse_expression(filename: []const u8, print: bool) !Expression {
     }
 }
 
-fn parse_statements(filename: []const u8, print: bool) !void {
+fn parse_statements(filename: []const u8, print: bool) ![]Statement {
     var tokens = try tokenize(filename, false);
+    var statements = std.ArrayList(Statement).init(std.heap.page_allocator);
 
     while (!tokens.at_end() and !parser.match(&tokens, &.{.EOF})) {
         if (Statement.parse(&tokens)) |result| {
@@ -125,6 +126,8 @@ fn parse_statements(filename: []const u8, print: bool) !void {
                     if (print) {
                         try std.io.getStdOut().writer().print("{s}\n", .{stmt});
                     }
+
+                    try statements.append(stmt);
                 },
                 .err => |err| {
                     try std.io.getStdErr().writer().print("{s}\n", .{err});
@@ -136,6 +139,8 @@ fn parse_statements(filename: []const u8, print: bool) !void {
             std.process.exit(65);
         }
     }
+
+    return statements.items;
 }
 
 fn evaluate(filename: []const u8, print: bool) !void {
@@ -153,12 +158,17 @@ fn evaluate(filename: []const u8, print: bool) !void {
 }
 
 fn run(filename: []const u8) !void {
-    _ = filename;
-    // const statements = try parse_statements(filename, false);
-    //
-    // for (statements) |stmt| {
-    //     stmt.eval() catch std.process.exit(70);
-    // }
+    const statements = try parse_statements(filename, false);
+
+    for (statements) |stmt| {
+        switch (stmt.eval() catch std.process.exit(70)) {
+            .ok => {},
+            .err => |err| {
+                try std.io.getStdErr().writer().print("{s}\n", .{err});
+                std.process.exit(70);
+            },
+        }
+    }
 }
 
 test {}

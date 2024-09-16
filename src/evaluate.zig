@@ -276,7 +276,7 @@ const EvaluateErrorType = union(enum) {
     InvalidOperands: []const u8,
 };
 
-const EvaluateError = struct {
+pub const EvaluateError = struct {
     type: EvaluateErrorType,
 
     pub fn format(
@@ -296,4 +296,4 @@ const EvaluateError = struct {
     }
 };
 
-const EvaluateResult = Result(Value, EvaluateError);
+pub const EvaluateResult = Result(Value, EvaluateError);

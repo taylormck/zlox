@@ -16,6 +16,7 @@ const Expression = expression.Expression;
 
 const evaluate = @import("../evaluate.zig");
 const Value = evaluate.Value;
+const EvaluateResult = evaluate.EvaluateResult;
 
 const parser = @import("parser.zig");
 const match = parser.match;
@@ -32,23 +33,24 @@ const StatementResult = Result(Statement, ParseError);
 pub const Statement = struct {
     type: StatementType,
 
-    pub fn eval(self: @This()) !void {
+    pub fn eval(self: @This()) !EvaluateResult {
         switch (self.type) {
             .print => |expr| {
                 switch (try evaluate.evaluate(expr)) {
                     .ok => |val| {
                         try std.io.getStdOut().writer().print("{s}\n", .{val});
+                        return .{ .ok = .nil };
                     },
-                    .err => {
-                        // TODO: throw a runtime exception
+                    .err => |err| {
+                        return .{ .err = err };
                     },
                 }
             },
             .expression => |expr| {
                 switch (try evaluate.evaluate(expr)) {
-                    .ok => {},
-                    .err => {
-                        // TODO: throw a runtime exception
+                    .ok => return .{ .ok = .nil },
+                    .err => |err| {
+                        return .{ .err = err };
                     },
                 }
             },
