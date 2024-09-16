@@ -1,8 +1,7 @@
 const std = @import("std");
 const Token = @import("token.zig").Token;
 const Statement = @import("parser/statement.zig").Statement;
-const expression = @import("parser/expression.zig");
-const Expression = expression.Expression;
+const Expression = @import("parser/expression.zig").Expression;
 const stream = @import("stream.zig");
 const TokenStream = stream.TokenStream;
 
@@ -53,7 +52,7 @@ fn report_usage_error_and_quit() void {
     std.process.exit(1);
 }
 
-fn tokenize(filename: []const u8, print: bool) ![]Token {
+fn tokenize(filename: []const u8, print: bool) !TokenStream {
     const file_contents = try std.fs.cwd().readFileAlloc(
         std.heap.page_allocator,
         filename,
@@ -79,91 +78,88 @@ fn tokenize(filename: []const u8, print: bool) ![]Token {
         std.process.exit(65);
     }
 
-    return tokens;
+    return TokenStream.new(tokens);
 }
 
-fn parse(filename: []const u8, print: bool) ![]Expression {
-    return parse_expressions(filename, print);
+fn parse(filename: []const u8, print: bool) !void {
+    _ = try parse_expression(filename, print);
 }
 
-fn parse_expressions(filename: []const u8, print: bool) ![]Expression {
-    const tokens = try tokenize(filename, false);
+fn parse_expression(filename: []const u8, print: bool) !Expression {
+    var tokens = try tokenize(filename, false);
 
-    if (parser.parse_expressions(tokens)) |result| {
-        const errors = result.errors;
-        const expressions = result.expressions;
+    if (Expression.parse(&tokens)) |result| {
+        switch (result) {
+            .ok => |expr| {
+                if (print) {
+                    try std.io.getStdOut().writer().print("{s}\n", .{expr});
+                }
 
-        for (errors) |err| {
-            try std.io.getStdErr().writer().print("{s}\n", .{err});
-        }
-
-        if (print) {
-            for (expressions) |stmt| {
-                try std.io.getStdOut().writer().print("{s}\n", .{stmt});
-            }
-        }
-
-        if (errors.len > 0) {
-            std.process.exit(65);
-        }
-
-        return expressions;
-    } else |err| {
-        try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
-        std.process.exit(65);
-    }
-}
-
-fn parse_statements(filename: []const u8, print: bool) ![]Statement {
-    const tokens = try tokenize(filename, false);
-
-    if (parser.parse_statements(tokens)) |result| {
-        const errors = result.errors;
-        const statements = result.statements;
-
-        for (errors) |err| {
-            try std.io.getStdErr().writer().print("{s}\n", .{err});
-        }
-
-        if (print) {
-            for (statements) |stmt| {
-                try std.io.getStdOut().writer().print("{s}\n", .{stmt});
-            }
-        }
-
-        if (errors.len > 0) {
-            std.process.exit(65);
-        }
-
-        return statements;
-    } else |err| {
-        try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
-        std.process.exit(65);
-    }
-}
-
-fn evaluate(filename: []const u8, print: bool) !void {
-    const expressions = try parse_expressions(filename, false);
-
-    for (expressions) |expr| {
-        switch (try evaluater.evaluate(expr)) {
-            .ok => |result| if (print) {
-                try std.io.getStdOut().writer().print("{s}\n", .{result});
+                return expr;
             },
+
             .err => |err| {
                 try std.io.getStdErr().writer().print("{s}\n", .{err});
-                std.process.exit(70);
+                std.process.exit(65);
+                return err.type;
             },
         }
+    } else |err| {
+        try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
+        std.process.exit(65);
+        return err;
+    }
+}
+
+// fn parse_statements(filename: []const u8, print: bool) ![]Statement {
+//     const tokens = try tokenize(filename, false);
+//
+//     if (parser.parse_statements(tokens)) |result| {
+//         const errors = result.errors;
+//         const statements = result.statements;
+//
+//         for (errors) |err| {
+//             try std.io.getStdErr().writer().print("{s}\n", .{err});
+//         }
+//
+//         if (print) {
+//             for (statements) |stmt| {
+//                 try std.io.getStdOut().writer().print("{s}\n", .{stmt});
+//             }
+//         }
+//
+//         if (errors.len > 0) {
+//             std.process.exit(65);
+//         }
+//
+//         return statements;
+//     } else |err| {
+//         try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
+//         std.process.exit(65);
+//     }
+// }
+
+fn evaluate(filename: []const u8, print: bool) !void {
+    const expr = try parse_expression(filename, false);
+
+    switch (try evaluater.evaluate(expr)) {
+        .ok => |result| if (print) {
+            try std.io.getStdOut().writer().print("{s}\n", .{result});
+        },
+        .err => |err| {
+            try std.io.getStdErr().writer().print("{s}\n", .{err});
+            std.process.exit(70);
+        },
     }
 }
 
 fn run(filename: []const u8) !void {
-    const statements = try parse_statements(filename, false);
-
-    for (statements) |stmt| {
-        try stmt.eval();
-    }
+    _ = filename;
+    // const statements = try parse_statements(filename, false);
+    //
+    // for (statements) |stmt| {
+    //     stmt.eval() catch std.process.exit(70);
+    // }
 }
 
 test {}

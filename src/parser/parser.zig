@@ -17,64 +17,6 @@ const Statement = statement.Statement;
 const ParseExpressionsResult = struct { expressions: []Expression, errors: []ParseError };
 const ParseStatementsResult = struct { statements: []Statement, errors: []ParseError };
 
-pub fn parse_statements(tokens: []const Token) !ParseStatementsResult {
-    var stream = TokenStream.new(tokens);
-
-    var statements = ArrayList(Statement).init(std.heap.page_allocator);
-    var errors = ArrayList(ParseError).init(std.heap.page_allocator);
-
-    while (!stream.at_end() and !match(&stream, &.{.EOF})) {
-        if (statement.parse_statement(&stream)) |result| {
-            // TODO: instead of returning directly, consider entering panic mode and
-            // try parsing the rest of the file once we get to a spot we understand.
-            switch (result) {
-                .ok => |stmt| {
-                    try statements.append(stmt);
-                },
-                .err => |err| {
-                    try errors.append(err);
-                },
-            }
-        } else |err| {
-            return err;
-        }
-    }
-
-    return .{
-        .statements = statements.items,
-        .errors = errors.items,
-    };
-}
-
-pub fn parse_expressions(tokens: []const Token) !ParseExpressionsResult {
-    var stream = TokenStream.new(tokens);
-
-    var expressions = ArrayList(Expression).init(std.heap.page_allocator);
-    var errors = ArrayList(ParseError).init(std.heap.page_allocator);
-
-    while (!stream.at_end() and !match(&stream, &.{.EOF})) {
-        if (expression.parse_expression(&stream)) |result| {
-            // TODO: instead of returning directly, consider entering panic mode and
-            // try parsing the rest of the file once we get to a spot we understand.
-            switch (result) {
-                .ok => |expr| {
-                    try expressions.append(expr);
-                },
-                .err => |err| {
-                    try errors.append(err);
-                },
-            }
-        } else |err| {
-            return err;
-        }
-    }
-
-    return .{
-        .expressions = expressions.items,
-        .errors = errors.items,
-    };
-}
-
 pub fn match(stream: *TokenStream, expected: []const token.TokenType) bool {
     if (stream.at_end()) {
         return false;
