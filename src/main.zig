@@ -1,9 +1,11 @@
 const std = @import("std");
+
+const stream = @import("stream.zig");
+const TokenStream = stream.TokenStream;
+
 const Token = @import("token.zig").Token;
 const Statement = @import("parser/statement.zig").Statement;
 const Expression = @import("parser/expression.zig").Expression;
-const stream = @import("stream.zig");
-const TokenStream = stream.TokenStream;
 
 const scanner = @import("scanner.zig");
 const parser = @import("parser/parser.zig");
@@ -14,6 +16,7 @@ pub fn main() !void {
     switch (command) {
         .tokenize => |filename| _ = try tokenize(filename, true),
         .parse => |filename| _ = try parse(filename, true),
+        .parse_statements => |filename| try parse_statements(filename, true),
         .evaluate => |filename| _ = try evaluate(filename, true),
         .run => |filename| _ = try run(filename),
     }
@@ -22,6 +25,7 @@ pub fn main() !void {
 const Command = union(enum) {
     tokenize: []const u8,
     parse: []const u8,
+    parse_statements: []const u8,
     evaluate: []const u8,
     run: []const u8,
 };
@@ -111,33 +115,28 @@ fn parse_expression(filename: []const u8, print: bool) !Expression {
     }
 }
 
-// fn parse_statements(filename: []const u8, print: bool) ![]Statement {
-//     const tokens = try tokenize(filename, false);
-//
-//     if (parser.parse_statements(tokens)) |result| {
-//         const errors = result.errors;
-//         const statements = result.statements;
-//
-//         for (errors) |err| {
-//             try std.io.getStdErr().writer().print("{s}\n", .{err});
-//         }
-//
-//         if (print) {
-//             for (statements) |stmt| {
-//                 try std.io.getStdOut().writer().print("{s}\n", .{stmt});
-//             }
-//         }
-//
-//         if (errors.len > 0) {
-//             std.process.exit(65);
-//         }
-//
-//         return statements;
-//     } else |err| {
-//         try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
-//         std.process.exit(65);
-//     }
-// }
+fn parse_statements(filename: []const u8, print: bool) !void {
+    var tokens = try tokenize(filename, false);
+
+    while (!tokens.at_end() and !parser.match(&tokens, &.{.EOF})) {
+        if (Statement.parse(&tokens)) |result| {
+            switch (result) {
+                .ok => |stmt| {
+                    if (print) {
+                        try std.io.getStdOut().writer().print("{s}\n", .{stmt});
+                    }
+                },
+                .err => |err| {
+                    try std.io.getStdErr().writer().print("{s}\n", .{err});
+                    std.process.exit(65);
+                },
+            }
+        } else |err| {
+            try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
+            std.process.exit(65);
+        }
+    }
+}
 
 fn evaluate(filename: []const u8, print: bool) !void {
     const expr = try parse_expression(filename, false);
