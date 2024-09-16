@@ -23,7 +23,10 @@ const match = parser.match;
 const consume = parser.consume;
 const ParseError = parser.ParseError;
 
+const Scope = @import("../Scope.zig").Scope;
+
 const StatementType = union(enum) {
+    declaration: struct { name: []const u8, initializer: Expression },
     print: Expression,
     expression: Expression,
 };
@@ -33,8 +36,15 @@ const StatementResult = Result(Statement, ParseError);
 pub const Statement = struct {
     type: StatementType,
 
-    pub fn eval(self: @This()) !EvaluateResult {
+    pub fn eval(self: @This(), scope: Scope) !EvaluateResult {
+        _ = scope;
+
         switch (self.type) {
+            .declaration => |variable| {
+                _ = variable;
+                // TODO: assign the value to the variable
+                @panic("Not implemented yet");
+            },
             .print => |expr| {
                 switch (try evaluate.evaluate(expr)) {
                     .ok => |val| {
@@ -64,17 +74,67 @@ pub const Statement = struct {
         writer: anytype,
     ) !void {
         switch (self.type) {
+            .declaration => |variable| try writer.print(
+                "var {s} = {?s};",
+                .{ variable.name, variable.initializer },
+            ),
             .print => |expr| try writer.print("print {s};", .{expr}),
             .expression => |expr| try writer.print("{s};", .{expr}),
         }
     }
 
     pub fn parse(stream: *TokenStream) !StatementResult {
+        if (match(stream, &.{.VAR})) {
+            return try parse_declaration(stream);
+        }
+
         if (match(stream, &.{.PRINT})) {
             return try parse_print(stream);
         }
 
         return try parse_expression_statement(stream);
+    }
+
+    fn parse_declaration(stream: *TokenStream) !StatementResult {
+        if (consume(stream, .VAR) catch false) {
+            if (match(stream, &.{.IDENTIFIER})) {
+                const name = try stream.next();
+
+                var initializer: Expression = .{ .type = .{ .literal = .nil } };
+                if (consume(stream, .EQUAL) catch false) {
+                    const result = try Expression.parse(stream);
+
+                    switch (result) {
+                        .ok => |expr| {
+                            initializer = expr;
+                        },
+                        .err => |err| {
+                            return .{ .err = err };
+                        },
+                    }
+                }
+
+                if (consume(stream, .SEMICOLON) catch false) {
+                    return .{ .ok = .{ .type = .{
+                        .declaration = .{ .name = name.lexeme, .initializer = initializer },
+                    } } };
+                } else {
+                    return .{ .err = .{
+                        .type = error.UnexpectedToken,
+                        .token = try stream.previous(),
+                    } };
+                }
+            }
+            return .{ .err = .{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            } };
+        } else {
+            return .{ .err = .{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            } };
+        }
     }
 
     fn parse_print(stream: *TokenStream) !StatementResult {

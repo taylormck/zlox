@@ -1,6 +1,7 @@
 const std = @import("std");
 const Expression = @import("parser/expression.zig").Expression;
 const Result = @import("Result.zig").Result;
+const Value = @import("Value.zig").Value;
 
 pub fn evaluate(expr: Expression) !EvaluateResult {
     switch (expr.type) {
@@ -211,65 +212,6 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
         },
     }
 }
-
-pub const Value = union(enum) {
-    number: f64,
-    bool: bool,
-    nil,
-    string: []const u8,
-
-    pub fn format(
-        self: @This(),
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = fmt;
-        _ = options;
-
-        switch (self) {
-            .number => |num| try writer.print("{d}", .{num}),
-            .bool => |b| try writer.print("{}", .{b}),
-            .nil => try writer.print("nil", .{}),
-            .string => |s| try writer.print("{s}", .{s}),
-        }
-    }
-
-    fn is_number(self: @This()) bool {
-        return switch (self) {
-            .number => true,
-            else => false,
-        };
-    }
-
-    fn is_string(self: @This()) bool {
-        return switch (self) {
-            .string => true,
-            else => false,
-        };
-    }
-
-    fn is_same_type(self: @This(), other: @This()) bool {
-        return switch (self) {
-            .number => switch (other) {
-                .number => true,
-                else => false,
-            },
-            .bool => switch (other) {
-                .bool => true,
-                else => false,
-            },
-            .nil => switch (other) {
-                .nil => true,
-                else => false,
-            },
-            .string => switch (other) {
-                .string => true,
-                else => false,
-            },
-        };
-    }
-};
 
 const EvaluateErrorType = union(enum) {
     InvalidOperand: []const u8,

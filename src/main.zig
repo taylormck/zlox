@@ -6,6 +6,7 @@ const TokenStream = stream.TokenStream;
 const Token = @import("token.zig").Token;
 const Statement = @import("parser/statement.zig").Statement;
 const Expression = @import("parser/expression.zig").Expression;
+const Scope = @import("Scope.zig").Scope;
 
 const scanner = @import("scanner.zig");
 const parser = @import("parser/parser.zig");
@@ -159,9 +160,10 @@ fn evaluate(filename: []const u8, print: bool) !void {
 
 fn run(filename: []const u8) !void {
     const statements = try parse_statements(filename, false);
+    const global_scope = Scope.init(null, std.heap.page_allocator);
 
     for (statements) |stmt| {
-        switch (stmt.eval() catch std.process.exit(70)) {
+        switch (stmt.eval(global_scope) catch std.process.exit(70)) {
             .ok => {},
             .err => |err| {
                 try std.io.getStdErr().writer().print("{s}\n", .{err});
