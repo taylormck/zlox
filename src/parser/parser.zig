@@ -11,28 +11,37 @@ const Result = @import("../Result.zig").Result;
 const expression = @import("expression.zig");
 
 const statement = @import("statement.zig");
-const ParseStatementResult = statement.ParseStatementResult;
+const Statement = statement.Statement;
 
-pub fn parse(tokens: []const Token) !ParseStatementResult {
+const ParseResult = struct { statements: []Statement, errors: []ParseError };
+
+pub fn parse(tokens: []const Token) !ParseResult {
     var stream = TokenStream.new(tokens);
 
-    if (statement.parse_statement(&stream)) |result| {
-        // TODO: instead of returning directly, consider entering panic mode and
-        // try parsing the rest of the file once we get to a spot we understand.
-        return switch (result) {
-            .ok => |stmt| .{
-                .ok = stmt,
-            },
-            .err => |err| {
-                var errors = ArrayList(ParseError).init(std.heap.page_allocator);
-                try errors.append(err);
+    var statements = ArrayList(Statement).init(std.heap.page_allocator);
+    var errors = ArrayList(ParseError).init(std.heap.page_allocator);
 
-                return .{ .err = errors.items };
-            },
-        };
-    } else |err| {
-        return err;
+    while (!stream.at_end() and !match(&stream, &.{.EOF})) {
+        if (statement.parse_statement(&stream)) |result| {
+            // TODO: instead of returning directly, consider entering panic mode and
+            // try parsing the rest of the file once we get to a spot we understand.
+            switch (result) {
+                .ok => |stmt| {
+                    try statements.append(stmt);
+                },
+                .err => |err| {
+                    try errors.append(err);
+                },
+            }
+        } else |err| {
+            return err;
+        }
     }
+
+    return .{
+        .statements = statements.items,
+        .errors = errors.items,
+    };
 }
 
 pub fn match(stream: *TokenStream, expected: []const token.TokenType) bool {

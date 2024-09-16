@@ -81,25 +81,28 @@ fn tokenize(filename: []const u8, print: bool) ![]Token {
     return tokens;
 }
 
-fn parse(filename: []const u8, print: bool) !Statement {
+fn parse(filename: []const u8, print: bool) ![]Statement {
     const tokens = try tokenize(filename, false);
 
     if (parser.parse(tokens)) |result| {
-        switch (result) {
-            .ok => |stmt| {
-                if (print) {
-                    try std.io.getStdOut().writer().print("{s}\n", .{stmt});
-                }
+        const errors = result.errors;
+        const statements = result.statements;
 
-                return stmt;
-            },
-            .err => |errors| {
-                for (errors) |err| {
-                    try std.io.getStdErr().writer().print("{s}\n", .{err});
-                }
-                std.process.exit(65);
-            },
+        for (errors) |err| {
+            try std.io.getStdErr().writer().print("{s}\n", .{err});
         }
+
+        if (print) {
+            for (statements) |stmt| {
+                try std.io.getStdOut().writer().print("{s}\n", .{stmt});
+            }
+        }
+
+        if (errors.len > 0) {
+            std.process.exit(65);
+        }
+
+        return statements;
     } else |err| {
         try std.io.getStdErr().writer().print("Unexpected error: {any}\n", .{err});
         std.process.exit(65);
@@ -131,9 +134,11 @@ fn evaluate(filename: []const u8, print: bool) !void {
 }
 
 fn run(filename: []const u8) !void {
-    const statement = try parse(filename, false);
+    const statements = try parse(filename, false);
 
-    try statement.eval();
+    for (statements) |stmt| {
+        try stmt.eval();
+    }
 }
 
 test {}
