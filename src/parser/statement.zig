@@ -36,17 +36,21 @@ const StatementResult = Result(Statement, ParseError);
 pub const Statement = struct {
     type: StatementType,
 
-    pub fn eval(self: @This(), scope: Scope) !EvaluateResult {
-        _ = scope;
-
+    pub fn eval(self: @This(), scope: *Scope) !EvaluateResult {
         switch (self.type) {
             .declaration => |variable| {
-                _ = variable;
-                // TODO: assign the value to the variable
-                @panic("Not implemented yet");
+                switch (try evaluate.evaluate(variable.initializer, scope)) {
+                    .ok => |value| {
+                        try scope.put(variable.name, value);
+                        return .{ .ok = value };
+                    },
+                    .err => {
+                        @panic("unhandled error");
+                    },
+                }
             },
             .print => |expr| {
-                switch (try evaluate.evaluate(expr)) {
+                switch (try evaluate.evaluate(expr, scope)) {
                     .ok => |val| {
                         try std.io.getStdOut().writer().print("{s}\n", .{val});
                         return .{ .ok = .nil };
@@ -57,7 +61,7 @@ pub const Statement = struct {
                 }
             },
             .expression => |expr| {
-                switch (try evaluate.evaluate(expr)) {
+                switch (try evaluate.evaluate(expr, scope)) {
                     .ok => return .{ .ok = .nil },
                     .err => |err| {
                         return .{ .err = err };

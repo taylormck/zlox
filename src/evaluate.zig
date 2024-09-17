@@ -2,21 +2,31 @@ const std = @import("std");
 const Expression = @import("parser/expression.zig").Expression;
 const Result = @import("Result.zig").Result;
 const Value = @import("Value.zig").Value;
+const Scope = @import("Scope.zig").Scope;
 
-pub fn evaluate(expr: Expression) !EvaluateResult {
+pub fn evaluate(expr: Expression, scope: *Scope) !EvaluateResult {
     switch (expr.type) {
         .literal => |literal| switch (literal) {
             .number => |n| return .{ .ok = .{ .number = n } },
             .bool => |b| return .{ .ok = .{ .bool = b } },
             .nil => return .{ .ok = .nil },
             .string => |s| return .{ .ok = .{ .string = s } },
+            .identifier => |i| {
+                if (scope.get(i)) |val| {
+                    return .{ .ok = val };
+                } else |_| {
+                    return .{
+                        .err = .{ .type = .{ .UndefinedVariable = i } },
+                    };
+                }
+            },
             else => @panic("Unsupported literal type"),
         },
         .grouping => {
-            return evaluate(expr.children.items[0]);
+            return evaluate(expr.children.items[0], scope);
         },
         .unary => |unary| {
-            const rhs = try evaluate(expr.children.items[0]);
+            const rhs = try evaluate(expr.children.items[0], scope);
 
             switch (rhs) {
                 .ok => |rhs_ok| {
@@ -42,11 +52,11 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
             }
         },
         .factor => |factor| {
-            const lhs = try evaluate(expr.children.items[0]);
+            const lhs = try evaluate(expr.children.items[0], scope);
 
             switch (lhs) {
                 .ok => |lhs_ok| {
-                    const rhs = try evaluate(expr.children.items[1]);
+                    const rhs = try evaluate(expr.children.items[1], scope);
 
                     switch (rhs) {
                         .ok => |rhs_ok| {
@@ -84,11 +94,11 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
             }
         },
         .term => |term| {
-            const lhs = try evaluate(expr.children.items[0]);
+            const lhs = try evaluate(expr.children.items[0], scope);
 
             switch (lhs) {
                 .ok => |lhs_ok| {
-                    const rhs = try evaluate(expr.children.items[1]);
+                    const rhs = try evaluate(expr.children.items[1], scope);
                     switch (rhs) {
                         .ok => |rhs_ok| {
                             var value: f64 = 0;
@@ -133,11 +143,11 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
             }
         },
         .comparison => |comp| {
-            const lhs = try evaluate(expr.children.items[0]);
+            const lhs = try evaluate(expr.children.items[0], scope);
 
             switch (lhs) {
                 .ok => |lhs_ok| {
-                    const rhs = try evaluate(expr.children.items[1]);
+                    const rhs = try evaluate(expr.children.items[1], scope);
 
                     switch (rhs) {
                         .ok => |rhs_ok| {
@@ -166,11 +176,11 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
             }
         },
         .equality => |eql| {
-            const lhs = try evaluate(expr.children.items[0]);
+            const lhs = try evaluate(expr.children.items[0], scope);
 
             switch (lhs) {
                 .ok => |lhs_ok| {
-                    const rhs = try evaluate(expr.children.items[1]);
+                    const rhs = try evaluate(expr.children.items[1], scope);
 
                     switch (rhs) {
                         .ok => |rhs_ok| {
@@ -216,6 +226,7 @@ pub fn evaluate(expr: Expression) !EvaluateResult {
 const EvaluateErrorType = union(enum) {
     InvalidOperand: []const u8,
     InvalidOperands: []const u8,
+    UndefinedVariable: []const u8,
 };
 
 pub const EvaluateError = struct {
@@ -233,6 +244,9 @@ pub const EvaluateError = struct {
             },
             .InvalidOperands => |needed_type| {
                 try writer.print("Operands must be {s}.\n", .{needed_type});
+            },
+            .UndefinedVariable => |name| {
+                try writer.print("Undefined variable '{s}'\n", .{name});
             },
         }
     }

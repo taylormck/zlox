@@ -146,8 +146,9 @@ fn parse_statements(filename: []const u8, print: bool) ![]Statement {
 
 fn evaluate(filename: []const u8, print: bool) !void {
     const expr = try parse_expression(filename, false);
+    var global_scope = Scope.init(null, std.heap.page_allocator);
 
-    switch (try evaluater.evaluate(expr)) {
+    switch (try evaluater.evaluate(expr, &global_scope)) {
         .ok => |result| if (print) {
             try std.io.getStdOut().writer().print("{s}\n", .{result});
         },
@@ -160,10 +161,10 @@ fn evaluate(filename: []const u8, print: bool) !void {
 
 fn run(filename: []const u8) !void {
     const statements = try parse_statements(filename, false);
-    const global_scope = Scope.init(null, std.heap.page_allocator);
+    var global_scope = Scope.init(null, std.heap.page_allocator);
 
     for (statements) |stmt| {
-        switch (stmt.eval(global_scope) catch std.process.exit(70)) {
+        switch (stmt.eval(&global_scope) catch std.process.exit(70)) {
             .ok => {},
             .err => |err| {
                 try std.io.getStdErr().writer().print("{s}\n", .{err});
