@@ -22,10 +22,12 @@ const parser = @import("parser.zig");
 const match = parser.match;
 const consume = parser.consume;
 const ParseError = parser.ParseError;
+const ParseErrorType = parser.ParseErrorType;
 
 const Scope = @import("../Scope.zig").Scope;
 
 const StatementType = union(enum) {
+    block: []Statement,
     declaration: struct { name: []const u8, initializer: Expression },
     print: Expression,
     expression: Expression,
@@ -36,8 +38,22 @@ const StatementResult = Result(Statement, ParseError);
 pub const Statement = struct {
     type: StatementType,
 
-    pub fn eval(self: @This(), scope: *Scope) !EvaluateResult {
+    const Self = @This();
+
+    pub fn eval(self: *const Self, scope: *Scope) !EvaluateResult {
         switch (self.type) {
+            .block => |statements| {
+                var block_scope = Scope.init(scope, scope.allocator);
+
+                for (statements) |stmt| {
+                    switch (try stmt.eval(&block_scope)) {
+                        .ok => {},
+                        .err => |err| return .{ .err = err },
+                    }
+                }
+
+                return .{ .ok = .nil };
+            },
             .declaration => |variable| {
                 switch (try evaluate.evaluate(variable.initializer, scope)) {
                     .ok => |value| {
@@ -72,12 +88,21 @@ pub const Statement = struct {
     }
 
     pub fn format(
-        self: @This(),
+        self: *const Self,
         comptime _: []const u8,
         _: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
         switch (self.type) {
+            .block => |statements| {
+                try writer.print("{{ ", .{});
+
+                for (statements) |stmt| {
+                    try writer.print("{s}", .{stmt});
+                }
+
+                try writer.print("}} ", .{});
+            },
             .declaration => |variable| try writer.print(
                 "var {s} = {?s};",
                 .{ variable.name, variable.initializer },
@@ -88,6 +113,10 @@ pub const Statement = struct {
     }
 
     pub fn parse(stream: *TokenStream) !StatementResult {
+        if (match(stream, &.{.LEFT_BRACE})) {
+            return try parse_block(stream);
+        }
+
         if (match(stream, &.{.VAR})) {
             return try parse_declaration(stream);
         }
@@ -97,6 +126,27 @@ pub const Statement = struct {
         }
 
         return try parse_expression_statement(stream);
+    }
+
+    fn parse_block(stream: *TokenStream) (std.mem.Allocator.Error || ParseErrorType)!StatementResult {
+        _ = try consume(stream, .LEFT_BRACE);
+
+        var statements = ArrayList(Statement).init(std.heap.page_allocator);
+
+        while (!match(stream, &.{.RIGHT_BRACE})) {
+            switch (try Self.parse(stream)) {
+                .ok => |stmt| {
+                    try statements.append(stmt);
+                },
+                .err => |err| return .{ .err = err },
+            }
+        }
+
+        _ = try consume(stream, .RIGHT_BRACE);
+
+        return .{ .ok = .{ .type = .{
+            .block = statements.items,
+        } } };
     }
 
     fn parse_declaration(stream: *TokenStream) !StatementResult {

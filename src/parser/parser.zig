@@ -42,7 +42,7 @@ pub fn consume(stream: *TokenStream, expected: token.TokenType) !bool {
     return error.UnexpectedToken;
 }
 
-const ParseErrorType = error{
+pub const ParseErrorType = error{
     UnexpectedToken,
     UnexpectedError,
     InvalidAssignmentTarget,
