@@ -45,6 +45,7 @@ pub fn consume(stream: *TokenStream, expected: token.TokenType) !bool {
 const ParseErrorType = error{
     UnexpectedToken,
     UnexpectedError,
+    InvalidAssignmentTarget,
 };
 
 pub const ParseError = struct {
@@ -69,6 +70,9 @@ pub const ParseError = struct {
             },
             error.UnexpectedError => {
                 try writer.print("Unexpected error occurred.", .{});
+            },
+            error.InvalidAssignmentTarget => {
+                try writer.print("Invalid assignment target.", .{});
             },
         }
     }

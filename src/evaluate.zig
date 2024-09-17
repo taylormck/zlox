@@ -224,6 +224,23 @@ pub fn evaluate(expr: Expression, scope: *Scope) !EvaluateResult {
                 },
             }
         },
+        .assignment => |name| {
+            _ = scope.get(name) catch {
+                return .{ .err = .{ .type = .{ .UndefinedVariable = name } } };
+            };
+
+            const rhs = try evaluate(expr.children.items[0], scope);
+
+            switch (rhs) {
+                .ok => |val| {
+                    try scope.put(name, val);
+                    return .{ .ok = val };
+                },
+                .err => |err| {
+                    return .{ .err = err };
+                },
+            }
+        },
     }
 }
 

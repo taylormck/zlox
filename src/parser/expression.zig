@@ -24,6 +24,7 @@ const ExpressionType = union(enum) {
     term: Operator,
     comparison: Operator,
     equality: Operator,
+    assignment: []const u8,
 };
 
 const ExpressionResult = Result(Expression, ParseError);
@@ -63,11 +64,56 @@ pub const Expression = struct {
                 }
                 try writer.print(")", .{});
             },
+            .assignment => |name| {
+                try writer.print("{s} = {s}", .{ name, self.children.items[0] });
+            },
         }
     }
 
     pub fn parse(stream: *TokenStream) !ExpressionResult {
-        return parse_equality(stream);
+        return parse_assignment(stream);
+    }
+
+    fn parse_assignment(stream: *TokenStream) !ExpressionResult {
+        switch (try parse_equality(stream)) {
+            .ok => |lhs| {
+                if (match(stream, &.{.EQUAL})) {
+                    _ = consume(stream, .EQUAL) catch unreachable;
+
+                    switch (try parse_assignment(stream)) {
+                        .ok => |rhs| {
+                            switch (lhs.type) {
+                                .literal => |literal| {
+                                    switch (literal) {
+                                        .identifier => |name| {
+                                            var children = ArrayList(Expression).init(std.heap.page_allocator);
+                                            try children.append(rhs);
+
+                                            return .{ .ok = .{
+                                                .type = .{ .assignment = name },
+                                                .children = children,
+                                            } };
+                                        },
+                                        else => return .{ .err = .{
+                                            .type = error.InvalidAssignmentTarget,
+                                            .token = try stream.previous(),
+                                        } },
+                                    }
+                                },
+                                else => return .{ .err = .{
+                                    .type = error.InvalidAssignmentTarget,
+                                    .token = try stream.previous(),
+                                } },
+                            }
+                        },
+                        .err => |err| return .{ .err = err },
+                    }
+                }
+
+                return .{ .ok = lhs };
+            },
+            .err => |err| return .{ .err = err },
+        }
     }
 
     fn parse_equality(stream: *TokenStream) !ExpressionResult {
