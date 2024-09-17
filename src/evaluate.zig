@@ -246,7 +246,7 @@ pub const EvaluateError = struct {
                 try writer.print("Operands must be {s}.\n", .{needed_type});
             },
             .UndefinedVariable => |name| {
-                try writer.print("Undefined variable '{s}'\n", .{name});
+                try writer.print("Undefined variable '{s}'.\n", .{name});
             },
         }
     }

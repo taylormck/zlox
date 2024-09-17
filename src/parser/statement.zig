@@ -44,8 +44,8 @@ pub const Statement = struct {
                         try scope.put(variable.name, value);
                         return .{ .ok = value };
                     },
-                    .err => {
-                        @panic("unhandled error");
+                    .err => |err| {
+                        return .{ .err = err };
                     },
                 }
             },
