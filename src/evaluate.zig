@@ -1,3 +1,7 @@
+/// Hypothetically, this function could be a method on the Expression
+/// struct. However, it's huge.
+/// I decided to leave it factored out as its own thing to avoid
+/// making too much clutter in in Expression.zig
 const std = @import("std");
 const Expression = @import("parser/expression.zig").Expression;
 const Result = @import("Result.zig").Result;
