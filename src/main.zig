@@ -53,7 +53,7 @@ fn parse_args() !Command {
 }
 
 fn report_usage_error_and_quit() void {
-    std.debug.print("Usage: ./zig-interpreter <tokenize|parse> <filename>\n", .{});
+    std.debug.print("Usage: ./zig-interpreter <tokenize|parse|parse_statements|evaulate|run> <filename>\n", .{});
     std.process.exit(1);
 }
 
