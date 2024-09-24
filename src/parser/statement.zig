@@ -31,6 +31,7 @@ const StatementType = union(enum) {
     declaration: struct { name: []const u8, initializer: Expression },
     print: Expression,
     expression: Expression,
+    if_stmt: struct { condition: Expression, branches: ArrayList(Statement) },
 };
 
 const StatementResult = Result(Statement, ParseError);
@@ -42,6 +43,25 @@ pub const Statement = struct {
 
     pub fn eval(self: *const Self, scope: *Scope) !EvaluateResult {
         switch (self.type) {
+            .if_stmt => |stmt| {
+                switch (try evaluate.evaluate(stmt.condition, scope)) {
+                    .ok => |condition_value| {
+                        switch (condition_value) {
+                            .bool => |val| {
+                                if (val) {
+                                    return stmt.branches.items[0].eval(scope);
+                                } else if (stmt.branches.items.len > 1) {
+                                    return stmt.branches.items[1].eval(scope);
+                                }
+                            },
+                            else => return .{ .err = .{ .type = .{ .IncorrectType = "bool" } } },
+                        }
+                    },
+                    .err => |err| return .{ .err = err },
+                }
+
+                return .{ .ok = .nil };
+            },
             .block => |statements| {
                 var block_scope = Scope.init(scope, scope.allocator);
 
@@ -109,10 +129,21 @@ pub const Statement = struct {
             ),
             .print => |expr| try writer.print("print {s};", .{expr}),
             .expression => |expr| try writer.print("{s};", .{expr}),
+            .if_stmt => |stmt| {
+                try writer.print("if ({s})\n{{\n{s}\n}}", .{ stmt.condition, stmt.branches.items[0] });
+
+                if (stmt.branches.items.len > 1) {
+                    try writer.print("\nelse\n{{\n{s}\n}}", .{stmt.branches.items[1]});
+                }
+            },
         }
     }
 
     pub fn parse(stream: *TokenStream) !StatementResult {
+        if (match(stream, &.{.IF})) {
+            return try parse_if_stmt(stream);
+        }
+
         if (match(stream, &.{.LEFT_BRACE})) {
             return try parse_block(stream);
         }
@@ -126,6 +157,38 @@ pub const Statement = struct {
         }
 
         return try parse_expression_statement(stream);
+    }
+
+    fn parse_if_stmt(stream: *TokenStream) (std.mem.Allocator.Error || ParseErrorType)!StatementResult {
+        _ = try consume(stream, .IF);
+        _ = try consume(stream, .LEFT_PAREN);
+
+        const condition = switch (try Expression.parse(stream)) {
+            .ok => |expr| expr,
+            .err => |err| return .{ .err = err },
+        };
+
+        _ = try consume(stream, .RIGHT_PAREN);
+
+        var branches = ArrayList(Statement).init(std.heap.page_allocator);
+        switch (try Statement.parse(stream)) {
+            .ok => |stmt| try branches.append(stmt),
+            .err => |err| return .{ .err = err },
+        }
+
+        if (match(stream, &.{.ELSE})) {
+            _ = try consume(stream, .ELSE);
+
+            switch (try Statement.parse(stream)) {
+                .ok => |stmt| try branches.append(stmt),
+                .err => |err| return .{ .err = err },
+            }
+        }
+
+        return .{ .ok = .{ .type = .{ .if_stmt = .{
+            .condition = condition,
+            .branches = branches,
+        } } } };
     }
 
     fn parse_block(stream: *TokenStream) (std.mem.Allocator.Error || ParseErrorType)!StatementResult {

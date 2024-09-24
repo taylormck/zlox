@@ -248,6 +248,7 @@ const EvaluateErrorType = union(enum) {
     InvalidOperand: []const u8,
     InvalidOperands: []const u8,
     UndefinedVariable: []const u8,
+    IncorrectType: []const u8,
 };
 
 pub const EvaluateError = struct {
@@ -268,6 +269,9 @@ pub const EvaluateError = struct {
             },
             .UndefinedVariable => |name| {
                 try writer.print("Undefined variable '{s}'.\n", .{name});
+            },
+            .IncorrectType => |expected_type| {
+                try writer.print("Expected {s}.\n", .{expected_type});
             },
         }
     }
