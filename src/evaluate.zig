@@ -241,6 +241,44 @@ pub fn evaluate(expr: Expression, scope: *Scope) !EvaluateResult {
                 },
             }
         },
+        .logic_or => {
+            switch (try evaluate(expr.children.items[0], scope)) {
+                .ok => |or_val| {
+                    switch (or_val) {
+                        .bool => |val| {
+                            if (val) {
+                                return .{ .ok = .{ .bool = true } };
+                            } else {
+                                return evaluate(expr.children.items[1], scope);
+                            }
+                        },
+                        else => return .{ .err = .{ .type = .{ .IncorrectType = "bool" } } },
+                    }
+                },
+                .err => |err| {
+                    return .{ .err = err };
+                },
+            }
+        },
+        .logic_and => {
+            switch (try evaluate(expr.children.items[0], scope)) {
+                .ok => |and_val| {
+                    switch (and_val) {
+                        .bool => |val| {
+                            if (val) {
+                                return evaluate(expr.children.items[1], scope);
+                            } else {
+                                return .{ .ok = .{ .bool = false } };
+                            }
+                        },
+                        else => return .{ .err = .{ .type = .{ .IncorrectType = "bool" } } },
+                    }
+                },
+                .err => |err| {
+                    return .{ .err = err };
+                },
+            }
+        },
     }
 }
 

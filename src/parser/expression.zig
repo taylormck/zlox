@@ -17,14 +17,16 @@ const consume = parser.consume;
 const ParseError = parser.ParseError;
 
 const ExpressionType = union(enum) {
+    assignment: []const u8,
+    equality: Operator,
+    logic_or,
+    logic_and,
+    comparison: Operator,
+    term: Operator,
+    factor: Operator,
+    unary: Operator,
     literal: Literal,
     grouping,
-    unary: Operator,
-    factor: Operator,
-    term: Operator,
-    comparison: Operator,
-    equality: Operator,
-    assignment: []const u8,
 };
 
 const ExpressionResult = Result(Expression, ParseError);
@@ -67,6 +69,12 @@ pub const Expression = struct {
             .assignment => |name| {
                 try writer.print("{s} = {s}", .{ name, self.children.items[0] });
             },
+            .logic_and => {
+                try writer.print("{s} and {s}", .{ self.children.items[0], self.children.items[1] });
+            },
+            .logic_or => {
+                try writer.print("{s} or {s}", .{ self.children.items[0], self.children.items[1] });
+            },
         }
     }
 
@@ -75,7 +83,7 @@ pub const Expression = struct {
     }
 
     fn parse_assignment(stream: *TokenStream) !ExpressionResult {
-        switch (try parse_equality(stream)) {
+        switch (try parse_logic_or(stream)) {
             .ok => |lhs| {
                 if (match(stream, &.{.EQUAL})) {
                     _ = consume(stream, .EQUAL) catch unreachable;
@@ -114,6 +122,71 @@ pub const Expression = struct {
             },
             .err => |err| return .{ .err = err },
         }
+    }
+
+    fn parse_logic_or(stream: *TokenStream) !ExpressionResult {
+        const result = try parse_logic_and(stream);
+
+        switch (result) {
+            .ok => |expr| {
+                var lhs = expr;
+
+                while (match(stream, &.{.OR})) {
+                    _ = consume(stream, .OR) catch unreachable;
+
+                    const right_result = try parse_logic_and(stream);
+
+                    switch (right_result) {
+                        .ok => |rhs| {
+                            var children = ArrayList(Expression).init(std.heap.page_allocator);
+                            try children.append(lhs);
+                            try children.append(rhs);
+
+                            lhs = .{
+                                .type = .logic_or,
+                                .children = children,
+                            };
+                        },
+                        .err => return right_result,
+                    }
+                }
+                return .{ .ok = lhs };
+            },
+            .err => return result,
+        }
+    }
+
+    fn parse_logic_and(stream: *TokenStream) !ExpressionResult {
+        const result = try parse_equality(stream);
+
+        switch (result) {
+            .ok => |expr| {
+                var lhs = expr;
+
+                while (match(stream, &.{.AND})) {
+                    _ = consume(stream, .AND) catch unreachable;
+
+                    const right_result = try parse_equality(stream);
+
+                    switch (right_result) {
+                        .ok => |rhs| {
+                            var children = ArrayList(Expression).init(std.heap.page_allocator);
+                            try children.append(lhs);
+                            try children.append(rhs);
+
+                            lhs = .{
+                                .type = .logic_and,
+                                .children = children,
+                            };
+                        },
+                        .err => return right_result,
+                    }
+                }
+                return .{ .ok = lhs };
+            },
+            .err => return result,
+        }
+        return result;
     }
 
     fn parse_equality(stream: *TokenStream) !ExpressionResult {
