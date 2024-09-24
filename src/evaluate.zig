@@ -233,7 +233,7 @@ pub fn evaluate(expr: Expression, scope: *Scope) !EvaluateResult {
 
             switch (rhs) {
                 .ok => |val| {
-                    try scope.put(name, val);
+                    try scope.assign(name, val);
                     return .{ .ok = val };
                 },
                 .err => |err| {

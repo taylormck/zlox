@@ -95,13 +95,13 @@ pub const Statement = struct {
     ) !void {
         switch (self.type) {
             .block => |statements| {
-                try writer.print("{{ ", .{});
+                try writer.print("{{\n", .{});
 
                 for (statements) |stmt| {
-                    try writer.print("{s}", .{stmt});
+                    try writer.print("{s}\n", .{stmt});
                 }
 
-                try writer.print("}} ", .{});
+                try writer.print("}}", .{});
             },
             .declaration => |variable| try writer.print(
                 "var {s} = {?s};",

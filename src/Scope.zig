@@ -38,4 +38,14 @@ pub const Scope = struct {
     pub fn put(self: *Self, key: []const u8, value: Value) !void {
         return self.map.put(key, value);
     }
+
+    pub fn assign(self: *Self, key: []const u8, value: Value) !void {
+        if (self.map.get(key)) |_| {
+            return self.put(key, value);
+        } else if (self.parent) |parent| {
+            return parent.assign(key, value);
+        }
+
+        return error.NotFound;
+    }
 };
