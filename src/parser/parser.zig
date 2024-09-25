@@ -64,7 +64,7 @@ pub const ParseError = struct {
         switch (self.type) {
             error.UnexpectedToken => {
                 try writer.print(
-                    "[line {d}] Error at '{s}': Expect expression.",
+                    "[line {d}] Error at '{s}': Expected expression.",
                     .{ self.token.line, self.token.lexeme },
                 );
             },
@@ -72,7 +72,10 @@ pub const ParseError = struct {
                 try writer.print("Unexpected error occurred.", .{});
             },
             error.InvalidAssignmentTarget => {
-                try writer.print("Invalid assignment target.", .{});
+                try writer.print(
+                    "[line {d}] Invalid assignment target: '{s}'.",
+                    .{ self.token.line, self.token.lexeme },
+                );
             },
         }
     }

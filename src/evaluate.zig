@@ -12,17 +12,15 @@ const Scope = @import("Scope.zig").Scope;
 pub fn evaluate(expr: Expression, scope: *Scope) !EvaluateResult {
     switch (expr.type) {
         .literal => |literal| switch (literal) {
-            .number => |n| return .{ .ok = .{ .number = n } },
-            .bool => |b| return .{ .ok = .{ .bool = b } },
-            .nil => return .{ .ok = .nil },
-            .string => |s| return .{ .ok = .{ .string = s } },
+            .number => |n| return Ok(.{ .number = n }),
+            .bool => |b| return Ok(.{ .bool = b }),
+            .nil => return Ok(.nil),
+            .string => |s| return Ok(.{ .string = s }),
             .identifier => |i| {
                 if (scope.get(i)) |val| {
-                    return .{ .ok = val };
+                    return Ok(val);
                 } else |_| {
-                    return .{
-                        .err = .{ .type = .{ .UndefinedVariable = i } },
-                    };
+                    return Err(.{ .type = .{ .UndefinedVariable = i } });
                 }
             },
             else => @panic("Unsupported literal type"),
@@ -31,254 +29,230 @@ pub fn evaluate(expr: Expression, scope: *Scope) !EvaluateResult {
             return evaluate(expr.children.items[0], scope);
         },
         .unary => |unary| {
-            const rhs = try evaluate(expr.children.items[0], scope);
+            const result = try evaluate(expr.children.items[0], scope);
 
-            switch (rhs) {
-                .ok => |rhs_ok| {
-                    return switch (unary) {
-                        .negate => switch (rhs_ok) {
-                            .number => |num| .{ .ok = .{ .bool = num == 0 } },
-                            .bool => |b| .{ .ok = .{ .bool = !b } },
-                            .nil => .{ .ok = .{ .bool = true } },
-                            else => @panic("Unsupported operand for negate operator"),
-                        },
-                        .minus => switch (rhs_ok) {
-                            .number => |num| .{ .ok = .{ .number = -num } },
-                            else => .{ .err = .{
-                                .type = .{ .InvalidOperand = "number" },
-                            } },
-                        },
-                        else => @panic("Unsupported unary operator"),
-                    };
-                },
-                .err => {
-                    return rhs;
-                },
+            if (!result.is_ok()) {
+                return result;
             }
+
+            const val = result.unwrap() catch unreachable;
+
+            return switch (unary) {
+                .negate => switch (val) {
+                    .number => |num| Ok(.{ .bool = num == 0 }),
+                    .bool => |b| Ok(.{ .bool = !b }),
+                    .nil => Ok(.{ .bool = true }),
+                    else => @panic("Unsupported operand for negate operator"),
+                },
+                .minus => switch (val) {
+                    .number => |num| Ok(.{ .number = -num }),
+                    else => Err(.{ .type = .{ .InvalidOperand = "number" } }),
+                },
+                else => @panic("Unsupported unary operator"),
+            };
         },
         .factor => |factor| {
-            const lhs = try evaluate(expr.children.items[0], scope);
+            const left_result = try evaluate(expr.children.items[0], scope);
 
-            switch (lhs) {
-                .ok => |lhs_ok| {
-                    const rhs = try evaluate(expr.children.items[1], scope);
+            if (!left_result.is_ok()) {
+                return left_result;
+            }
 
-                    switch (rhs) {
-                        .ok => |rhs_ok| {
-                            var value: f64 = 0;
+            const right_result = try evaluate(expr.children.items[1], scope);
 
-                            switch (factor) {
-                                .multiply => {
-                                    if (lhs_ok.is_number() and rhs_ok.is_number()) {
-                                        value = lhs_ok.number * rhs_ok.number;
-                                    } else {
-                                        return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
-                                    }
-                                },
+            if (!right_result.is_ok()) {
+                return right_result;
+            }
 
-                                .divide => {
-                                    if (lhs_ok.is_number() and rhs_ok.is_number()) {
-                                        value = lhs_ok.number / rhs_ok.number;
-                                    } else {
-                                        return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
-                                    }
-                                },
-                                else => @panic("Unsupported term operator"),
-                            }
+            const lhs = left_result.unwrap() catch unreachable;
+            const rhs = right_result.unwrap() catch unreachable;
 
-                            return .{ .ok = .{ .number = value } };
-                        },
-                        .err => {
-                            return rhs;
-                        },
+            var value: f64 = 0;
+
+            switch (factor) {
+                .multiply => {
+                    if (lhs.is_number() and rhs.is_number()) {
+                        value = lhs.number * rhs.number;
+                    } else {
+                        return Err(.{ .type = .{ .InvalidOperands = "numbers" } });
                     }
                 },
-                .err => {
-                    return lhs;
+
+                .divide => {
+                    if (lhs.is_number() and rhs.is_number()) {
+                        value = lhs.number / rhs.number;
+                    } else {
+                        return Err(.{ .type = .{ .InvalidOperands = "numbers" } });
+                    }
                 },
+                else => @panic("Unsupported factor operator"),
             }
+
+            return Ok(.{ .number = value });
         },
         .term => |term| {
-            const lhs = try evaluate(expr.children.items[0], scope);
+            const left_result = try evaluate(expr.children.items[0], scope);
 
-            switch (lhs) {
-                .ok => |lhs_ok| {
-                    const rhs = try evaluate(expr.children.items[1], scope);
-                    switch (rhs) {
-                        .ok => |rhs_ok| {
-                            var value: f64 = 0;
-                            switch (term) {
-                                .add => {
-                                    if (lhs_ok.is_string() and rhs_ok.is_string()) {
-                                        return .{ .ok = .{
-                                            .string = try std.fmt.allocPrint(
-                                                std.heap.page_allocator,
-                                                "{s}{s}",
-                                                .{ lhs_ok.string, rhs_ok.string },
-                                            ),
-                                        } };
-                                    } else if (lhs_ok.is_number() and rhs_ok.is_number()) {
-                                        value = lhs_ok.number + rhs_ok.number;
-                                    } else {
-                                        return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
-                                    }
-                                },
-                                .subtract => {
-                                    if (lhs_ok.is_number() and rhs_ok.is_number()) {
-                                        value = lhs_ok.number - rhs_ok.number;
-                                    } else {
-                                        return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
-                                    }
-                                },
-                                else => {
-                                    return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
-                                },
-                            }
+            if (!left_result.is_ok()) {
+                return left_result;
+            }
 
-                            return .{ .ok = .{ .number = value } };
-                        },
-                        .err => {
-                            return rhs;
-                        },
+            const right_result = try evaluate(expr.children.items[1], scope);
+
+            if (!right_result.is_ok()) {
+                return right_result;
+            }
+
+            const lhs = left_result.unwrap() catch unreachable;
+            const rhs = right_result.unwrap() catch unreachable;
+
+            var value: f64 = 0;
+            switch (term) {
+                .add => {
+                    if (lhs.is_string() and rhs.is_string()) {
+                        return Ok(.{
+                            .string = try std.fmt.allocPrint(
+                                std.heap.page_allocator,
+                                "{s}{s}",
+                                .{ lhs.string, rhs.string },
+                            ),
+                        });
+                    } else if (lhs.is_number() and rhs.is_number()) {
+                        value = lhs.number + rhs.number;
+                    } else {
+                        return Err(.{ .type = .{ .InvalidOperands = "numbers" } });
                     }
                 },
-                .err => {
-                    return lhs;
+                .subtract => {
+                    if (lhs.is_number() and rhs.is_number()) {
+                        value = lhs.number - rhs.number;
+                    } else {
+                        return Err(.{ .type = .{ .InvalidOperands = "numbers" } });
+                    }
                 },
+                else => @panic("Unsupported term operator"),
             }
+
+            return Ok(.{ .number = value });
         },
         .comparison => |comp| {
-            const lhs = try evaluate(expr.children.items[0], scope);
+            const left_result = try evaluate(expr.children.items[0], scope);
 
-            switch (lhs) {
-                .ok => |lhs_ok| {
-                    const rhs = try evaluate(expr.children.items[1], scope);
-
-                    switch (rhs) {
-                        .ok => |rhs_ok| {
-                            if (!lhs_ok.is_number() or !rhs_ok.is_number()) {
-                                return .{ .err = .{ .type = .{ .InvalidOperands = "numbers" } } };
-                            }
-
-                            const value = switch (comp) {
-                                .less => lhs_ok.number < rhs_ok.number,
-                                .less_equal => lhs_ok.number <= rhs_ok.number,
-                                .greater => lhs_ok.number > rhs_ok.number,
-                                .greater_equal => lhs_ok.number >= rhs_ok.number,
-                                else => @panic("Unsupported compare operator"),
-                            };
-
-                            return .{ .ok = .{ .bool = value } };
-                        },
-                        .err => {
-                            return rhs;
-                        },
-                    }
-                },
-                .err => {
-                    return lhs;
-                },
+            if (!left_result.is_ok()) {
+                return left_result;
             }
+
+            const right_result = try evaluate(expr.children.items[1], scope);
+
+            if (!right_result.is_ok()) {
+                return right_result;
+            }
+
+            const lhs = left_result.unwrap() catch unreachable;
+            const rhs = right_result.unwrap() catch unreachable;
+
+            if (!lhs.is_number() or !rhs.is_number()) {
+                return Err(.{ .type = .{ .InvalidOperands = "numbers" } });
+            }
+
+            const value = switch (comp) {
+                .less => lhs.number < rhs.number,
+                .less_equal => lhs.number <= rhs.number,
+                .greater => lhs.number > rhs.number,
+                .greater_equal => lhs.number >= rhs.number,
+                else => @panic("Unsupported compare operator"),
+            };
+
+            return Ok(.{ .bool = value });
         },
         .equality => |eql| {
-            const lhs = try evaluate(expr.children.items[0], scope);
+            const left_result = try evaluate(expr.children.items[0], scope);
 
-            switch (lhs) {
-                .ok => |lhs_ok| {
-                    const rhs = try evaluate(expr.children.items[1], scope);
-
-                    switch (rhs) {
-                        .ok => |rhs_ok| {
-                            if (!lhs_ok.is_same_type(rhs_ok)) {
-                                return switch (eql) {
-                                    .equal => .{ .ok = .{ .bool = false } },
-                                    .not_equal => .{ .ok = .{ .bool = true } },
-                                    else => @panic("Unsupported compare operator"),
-                                };
-                            }
-
-                            const value = switch (eql) {
-                                .equal => switch (lhs_ok) {
-                                    .number => lhs_ok.number == rhs_ok.number,
-                                    .bool => lhs_ok.bool == rhs_ok.bool,
-                                    .nil => true,
-                                    .string => std.mem.eql(u8, lhs_ok.string, rhs_ok.string),
-                                },
-                                .not_equal => switch (lhs_ok) {
-                                    .number => lhs_ok.number != rhs_ok.number,
-                                    .bool => lhs_ok.bool != rhs_ok.bool,
-                                    .nil => false,
-                                    .string => !std.mem.eql(u8, lhs_ok.string, rhs_ok.string),
-                                },
-                                else => @panic("Unsupported compare operator"),
-                            };
-
-                            return .{ .ok = .{ .bool = value } };
-                        },
-                        .err => {
-                            return rhs;
-                        },
-                    }
-                },
-                .err => {
-                    return lhs;
-                },
+            if (!left_result.is_ok()) {
+                return left_result;
             }
+
+            const right_result = try evaluate(expr.children.items[1], scope);
+
+            if (!right_result.is_ok()) {
+                return right_result;
+            }
+
+            const lhs = left_result.unwrap() catch unreachable;
+            const rhs = right_result.unwrap() catch unreachable;
+
+            if (!lhs.is_same_type(rhs)) {
+                return switch (eql) {
+                    .equal => Ok(.{ .bool = false }),
+                    .not_equal => Ok(.{ .bool = true }),
+                    else => @panic("Unsupported compare operator"),
+                };
+            }
+
+            const value = switch (eql) {
+                .equal => switch (lhs) {
+                    .number => lhs.number == rhs.number,
+                    .bool => lhs.bool == rhs.bool,
+                    .nil => true,
+                    .string => std.mem.eql(u8, lhs.string, rhs.string),
+                },
+                .not_equal => switch (lhs) {
+                    .number => lhs.number != rhs.number,
+                    .bool => lhs.bool != rhs.bool,
+                    .nil => false,
+                    .string => !std.mem.eql(u8, lhs.string, rhs.string),
+                },
+                else => @panic("Unsupported compare operator"),
+            };
+
+            return Ok(.{ .bool = value });
         },
         .assignment => |name| {
             _ = scope.get(name) catch {
-                return .{ .err = .{ .type = .{ .UndefinedVariable = name } } };
+                return Err(.{ .type = .{ .UndefinedVariable = name } });
             };
 
-            const rhs = try evaluate(expr.children.items[0], scope);
+            const result = try evaluate(expr.children.items[0], scope);
 
-            switch (rhs) {
-                .ok => |val| {
-                    try scope.assign(name, val);
-                    return .{ .ok = val };
-                },
-                .err => |err| {
-                    return .{ .err = err };
-                },
+            if (!result.is_ok()) {
+                const err = result.unwrap_err() catch unreachable;
+                return Err(err);
             }
+
+            const val = result.unwrap() catch unreachable;
+            try scope.assign(name, val);
+
+            return Ok(val);
         },
         .logic_or => {
-            switch (try evaluate(expr.children.items[0], scope)) {
-                .ok => |or_val| {
-                    switch (or_val) {
-                        .bool => |val| {
-                            if (val) {
-                                return .{ .ok = .{ .bool = true } };
-                            } else {
-                                return evaluate(expr.children.items[1], scope);
-                            }
-                        },
-                        else => return .{ .err = .{ .type = .{ .IncorrectType = "bool" } } },
-                    }
-                },
-                .err => |err| {
-                    return .{ .err = err };
-                },
+            const result = try evaluate(expr.children.items[0], scope);
+
+            if (!result.is_ok()) {
+                return result;
             }
+
+            const val = result.unwrap() catch unreachable;
+
+            if (val.is_truthy()) {
+                return Ok(.{ .bool = true });
+            }
+
+            return evaluate(expr.children.items[1], scope);
         },
         .logic_and => {
-            switch (try evaluate(expr.children.items[0], scope)) {
-                .ok => |and_val| {
-                    switch (and_val) {
-                        .bool => |val| {
-                            if (val) {
-                                return evaluate(expr.children.items[1], scope);
-                            } else {
-                                return .{ .ok = .{ .bool = false } };
-                            }
-                        },
-                        else => return .{ .err = .{ .type = .{ .IncorrectType = "bool" } } },
-                    }
-                },
-                .err => |err| {
-                    return .{ .err = err };
-                },
+            const result = try evaluate(expr.children.items[0], scope);
+
+            if (!result.is_ok()) {
+                return result;
             }
+
+            const val = result.unwrap() catch unreachable;
+
+            if (val.is_truthy()) {
+                return evaluate(expr.children.items[1], scope);
+            }
+
+            return Ok(.{ .bool = false });
         },
     }
 }
@@ -317,3 +291,5 @@ pub const EvaluateError = struct {
 };
 
 pub const EvaluateResult = Result(Value, EvaluateError);
+const Ok = EvaluateResult.ok;
+const Err = EvaluateResult.err;

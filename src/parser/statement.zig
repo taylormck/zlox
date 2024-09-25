@@ -207,7 +207,7 @@ pub const Statement = struct {
 
         const condition = switch (try Expression.parse(stream)) {
             .ok => |expr| expr,
-            .err => |err| return .{ .err = err },
+            .err => |err| return StatementErr(err),
         };
 
         _ = consume(stream, .RIGHT_PAREN) catch {
@@ -220,7 +220,7 @@ pub const Statement = struct {
         var branches = ArrayList(Statement).init(std.heap.page_allocator);
         switch (try Statement.parse(stream)) {
             .ok => |stmt| try branches.append(stmt),
-            .err => |err| return .{ .err = err },
+            .err => |err| return StatementErr(err),
         }
 
         if (match(stream, &.{.ELSE})) {
