@@ -19,6 +19,13 @@ pub fn Result(comptime T: type, comptime Error: type) type {
             };
         }
 
+        pub fn unwrap_err(self: Self) !Error {
+            return switch (self) {
+                .err => |e| e,
+                .ok => error.UnwrappedError,
+            };
+        }
+
         pub fn ok(t: T) Self {
             return .{ .ok = t };
         }

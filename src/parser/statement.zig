@@ -17,6 +17,8 @@ const Expression = expression.Expression;
 const evaluate = @import("../evaluate.zig");
 const Value = evaluate.Value;
 const EvaluateResult = evaluate.EvaluateResult;
+const EvaluateOk = EvaluateResult.ok;
+const EvaluateErr = EvaluateResult.err;
 
 const parser = @import("parser.zig");
 const match = parser.match;
@@ -36,6 +38,9 @@ const StatementType = union(enum) {
 };
 
 const StatementResult = Result(Statement, ParseError);
+const StatementOk = StatementResult.ok;
+const StatementErr = StatementResult.err;
+
 const StatementParseErrorSet = error{UnwrappedError} || std.mem.Allocator.Error || ParseErrorType;
 
 pub const Statement = struct {
@@ -46,39 +51,46 @@ pub const Statement = struct {
     pub fn eval(self: *const Self, scope: *Scope) !EvaluateResult {
         switch (self.type) {
             .if_stmt => |stmt| {
-                switch (try evaluate.evaluate(stmt.condition, scope)) {
-                    .ok => |condition_value| {
-                        if (condition_value.is_truthy()) {
-                            return stmt.branches.items[0].eval(scope);
-                        } else if (stmt.branches.items.len > 1) {
-                            return stmt.branches.items[1].eval(scope);
-                        }
-                    },
-                    .err => |err| return .{ .err = err },
+                const result = try evaluate.evaluate(stmt.condition, scope);
+
+                if (!result.is_ok()) {
+                    const err = result.unwrap_err() catch unreachable;
+                    return EvaluateErr(err);
                 }
 
-                return .{ .ok = .nil };
+                const val = result.unwrap() catch unreachable;
+
+                if (val.is_truthy()) {
+                    return stmt.branches.items[0].eval(scope);
+                } else if (stmt.branches.items.len > 1) {
+                    return stmt.branches.items[1].eval(scope);
+                }
+
+                return EvaluateOk(.nil);
             },
             .while_stmt => |stmt| {
-                var should_repeat = true;
+                while (true) {
+                    const result = try evaluate.evaluate(stmt.condition, scope);
 
-                while (should_repeat) {
-                    switch (try evaluate.evaluate(stmt.condition, scope)) {
-                        .ok => |condition_value| {
-                            if (condition_value.is_truthy()) {
-                                switch (try stmt.branches.items[0].eval(scope)) {
-                                    .err => |err| return .{ .err = err },
-                                    else => {},
-                                }
-                            } else {
-                                should_repeat = false;
-                            }
-                        },
-                        .err => return .{ .err = .{ .type = .{ .IncorrectType = "bool" } } },
+                    if (!result.is_ok()) {
+                        return EvaluateErr(.{ .type = .{ .IncorrectType = "bool" } });
+                    }
+
+                    const val = result.unwrap() catch unreachable;
+
+                    if (!val.is_truthy()) {
+                        break;
+                    }
+
+                    const block_result = try stmt.branches.items[0].eval(scope);
+
+                    if (!block_result.is_ok()) {
+                        const err = block_result.unwrap_err() catch unreachable;
+                        return EvaluateErr(err);
                     }
                 }
 
-                return .{ .ok = .nil };
+                return EvaluateOk(.nil);
             },
             .block => |statements| {
                 var block_scope = Scope.init(scope, scope.allocator);
@@ -86,40 +98,34 @@ pub const Statement = struct {
                 for (statements) |stmt| {
                     switch (try stmt.eval(&block_scope)) {
                         .ok => {},
-                        .err => |err| return .{ .err = err },
+                        .err => |err| return EvaluateErr(err),
                     }
                 }
 
-                return .{ .ok = .nil };
+                return EvaluateOk(.nil);
             },
             .declaration => |variable| {
                 switch (try evaluate.evaluate(variable.initializer, scope)) {
                     .ok => |value| {
                         try scope.put(variable.name, value);
-                        return .{ .ok = value };
+                        return EvaluateOk(value);
                     },
-                    .err => |err| {
-                        return .{ .err = err };
-                    },
+                    .err => |err| return EvaluateErr(err),
                 }
             },
             .print => |expr| {
                 switch (try evaluate.evaluate(expr, scope)) {
                     .ok => |val| {
                         try std.io.getStdOut().writer().print("{s}\n", .{val});
-                        return .{ .ok = .nil };
+                        return EvaluateOk(.nil);
                     },
-                    .err => |err| {
-                        return .{ .err = err };
-                    },
+                    .err => |err| return EvaluateErr(err),
                 }
             },
             .expression => |expr| {
                 switch (try evaluate.evaluate(expr, scope)) {
-                    .ok => return .{ .ok = .nil },
-                    .err => |err| {
-                        return .{ .err = err };
-                    },
+                    .ok => return EvaluateOk(.nil),
+                    .err => |err| return EvaluateErr(err),
                 }
             },
         }
@@ -185,15 +191,31 @@ pub const Statement = struct {
     }
 
     fn parse_if_stmt(stream: *TokenStream) StatementParseErrorSet!StatementResult {
-        _ = try consume(stream, .IF);
-        _ = try consume(stream, .LEFT_PAREN);
+        _ = consume(stream, .IF) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
+
+        _ = consume(stream, .LEFT_PAREN) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
 
         const condition = switch (try Expression.parse(stream)) {
             .ok => |expr| expr,
             .err => |err| return .{ .err = err },
         };
 
-        _ = try consume(stream, .RIGHT_PAREN);
+        _ = consume(stream, .RIGHT_PAREN) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
 
         var branches = ArrayList(Statement).init(std.heap.page_allocator);
         switch (try Statement.parse(stream)) {
@@ -202,45 +224,67 @@ pub const Statement = struct {
         }
 
         if (match(stream, &.{.ELSE})) {
-            _ = try consume(stream, .ELSE);
+            _ = consume(stream, .ELSE) catch unreachable;
 
             switch (try Statement.parse(stream)) {
                 .ok => |stmt| try branches.append(stmt),
-                .err => |err| return .{ .err = err },
+                .err => |err| return StatementErr(err),
             }
         }
 
-        return .{ .ok = .{ .type = .{ .if_stmt = .{
+        return StatementOk(.{ .type = .{ .if_stmt = .{
             .condition = condition,
             .branches = branches,
-        } } } };
+        } } });
     }
 
     fn parse_while_stmt(stream: *TokenStream) StatementParseErrorSet!StatementResult {
-        _ = try consume(stream, .WHILE);
-        _ = try consume(stream, .LEFT_PAREN);
+        _ = consume(stream, .WHILE) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
+
+        _ = consume(stream, .LEFT_PAREN) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
 
         const condition = switch (try Expression.parse(stream)) {
             .ok => |expr| expr,
             .err => |err| return .{ .err = err },
         };
 
-        _ = try consume(stream, .RIGHT_PAREN);
+        _ = consume(stream, .RIGHT_PAREN) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
 
         var branches = ArrayList(Statement).init(std.heap.page_allocator);
+
         switch (try Statement.parse(stream)) {
             .ok => |stmt| try branches.append(stmt),
             .err => |err| return .{ .err = err },
         }
 
-        return .{ .ok = .{ .type = .{ .while_stmt = .{
+        return StatementOk(.{ .type = .{ .while_stmt = .{
             .condition = condition,
             .branches = branches,
-        } } } };
+        } } });
     }
 
     fn parse_block(stream: *TokenStream) StatementParseErrorSet!StatementResult {
-        _ = try consume(stream, .LEFT_BRACE);
+        _ = consume(stream, .LEFT_BRACE) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
 
         var statements = ArrayList(Statement).init(std.heap.page_allocator);
 
@@ -249,107 +293,107 @@ pub const Statement = struct {
                 .ok => |stmt| {
                     try statements.append(stmt);
                 },
-                .err => |err| return .{ .err = err },
+                .err => |err| return StatementErr(err),
             }
         }
 
-        _ = try consume(stream, .RIGHT_BRACE);
+        _ = consume(stream, .RIGHT_BRACE) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
 
-        return .{ .ok = .{ .type = .{
+        return StatementOk(.{ .type = .{
             .block = statements.items,
-        } } };
+        } });
     }
 
     fn parse_declaration(stream: *TokenStream) !StatementResult {
-        if (consume(stream, .VAR) catch false) {
-            if (match(stream, &.{.IDENTIFIER})) {
-                const name = try stream.next();
-
-                var initializer: Expression = .{ .type = .{ .literal = .nil } };
-                if (consume(stream, .EQUAL) catch false) {
-                    const result = try Expression.parse(stream);
-
-                    switch (result) {
-                        .ok => |expr| {
-                            initializer = expr;
-                        },
-                        .err => |err| {
-                            return .{ .err = err };
-                        },
-                    }
-                }
-
-                if (consume(stream, .SEMICOLON) catch false) {
-                    return .{ .ok = .{ .type = .{
-                        .declaration = .{ .name = name.lexeme, .initializer = initializer },
-                    } } };
-                } else {
-                    return .{ .err = .{
-                        .type = error.UnexpectedToken,
-                        .token = try stream.previous(),
-                    } };
-                }
-            }
-            return .{ .err = .{
+        _ = consume(stream, .VAR) catch {
+            return StatementErr(.{
                 .type = error.UnexpectedToken,
                 .token = try stream.previous(),
-            } };
-        } else {
-            return .{ .err = .{
+            });
+        };
+
+        if (!match(stream, &.{.IDENTIFIER})) {
+            return StatementErr(.{
                 .type = error.UnexpectedToken,
                 .token = try stream.previous(),
-            } };
+            });
         }
+
+        const name = try stream.next();
+        var initializer: Expression = .{ .type = .{ .literal = .nil } };
+
+        if (consume(stream, .EQUAL) catch false) {
+            initializer = switch (try Expression.parse(stream)) {
+                .ok => |expr| expr,
+                .err => |err| return StatementErr(err),
+            };
+        }
+
+        _ = consume(stream, .SEMICOLON) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
+
+        return StatementOk(.{ .type = .{
+            .declaration = .{ .name = name.lexeme, .initializer = initializer },
+        } });
     }
 
     fn parse_print(stream: *TokenStream) !StatementResult {
-        if (consume(stream, .PRINT) catch false) {
-            const result = try Expression.parse(stream);
-
-            switch (result) {
-                .ok => |expr| {
-                    if (consume(stream, .SEMICOLON) catch false) {
-                        return .{ .ok = .{
-                            .type = .{ .print = expr },
-                        } };
-                    } else {
-                        return .{ .err = .{
-                            .type = error.UnexpectedToken,
-                            .token = try stream.previous(),
-                        } };
-                    }
-                },
-                .err => |err| {
-                    return .{ .err = err };
-                },
-            }
-        } else {
-            return .{ .err = .{
+        _ = consume(stream, .PRINT) catch {
+            return StatementErr(.{
                 .type = error.UnexpectedToken,
                 .token = try stream.previous(),
-            } };
+            });
+        };
+
+        const result = try Expression.parse(stream);
+
+        if (!result.is_ok()) {
+            const err = result.unwrap_err() catch unreachable;
+            return StatementErr(err);
         }
+
+        const expr = result.unwrap() catch unreachable;
+
+        _ = consume(stream, .SEMICOLON) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
+
+        return StatementOk(.{
+            .type = .{ .print = expr },
+        });
     }
 
     fn parse_expression_statement(stream: *TokenStream) !StatementResult {
-        if (Expression.parse(stream)) |result| {
-            switch (result) {
-                .ok => |expr| {
-                    if (consume(stream, .SEMICOLON) catch false) {
-                        return .{ .ok = .{
-                            .type = .{ .expression = expr },
-                        } };
-                    } else {
-                        return .{ .err = .{
-                            .type = error.UnexpectedToken,
-                            .token = try stream.previous(),
-                        } };
-                    }
-                },
-                .err => |err| return StatementResult.err(err),
-            }
-        } else |err| {
-            return err;
+        const result = try Expression.parse(stream);
+
+        if (!result.is_ok()) {
+            const err = result.unwrap_err() catch unreachable;
+            return StatementErr(err);
         }
+
+        const expr = result.unwrap() catch unreachable;
+
+        _ = consume(stream, .SEMICOLON) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
+
+        return StatementOk(.{
+            .type = .{ .expression = expr },
+        });
     }
 };
