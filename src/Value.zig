@@ -6,8 +6,10 @@ pub const Value = union(enum) {
     nil,
     string: []const u8,
 
+    const Self = @This();
+
     pub fn format(
-        self: @This(),
+        self: Self,
         comptime fmt: []const u8,
         options: std.fmt.FormatOptions,
         writer: anytype,
@@ -23,17 +25,26 @@ pub const Value = union(enum) {
         }
     }
 
-    pub fn is_number(self: @This()) bool {
+    pub fn is_number(self: Self) bool {
         return switch (self) {
             .number => true,
             else => false,
         };
     }
 
-    pub fn is_string(self: @This()) bool {
+    pub fn is_string(self: Self) bool {
         return switch (self) {
             .string => true,
             else => false,
+        };
+    }
+
+    pub fn is_truthy(self: Self) bool {
+        return switch (self) {
+            .number => |num| num != 0,
+            .bool => |val| val,
+            .nil => false,
+            .string => |s| !std.mem.eql(u8, s, ""),
         };
     }
 

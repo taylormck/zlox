@@ -32,6 +32,7 @@ const StatementType = union(enum) {
     print: Expression,
     expression: Expression,
     if_stmt: struct { condition: Expression, branches: ArrayList(Statement) },
+    while_stmt: struct { condition: Expression, branches: ArrayList(Statement) },
 };
 
 const StatementResult = Result(Statement, ParseError);
@@ -46,18 +47,34 @@ pub const Statement = struct {
             .if_stmt => |stmt| {
                 switch (try evaluate.evaluate(stmt.condition, scope)) {
                     .ok => |condition_value| {
-                        switch (condition_value) {
-                            .bool => |val| {
-                                if (val) {
-                                    return stmt.branches.items[0].eval(scope);
-                                } else if (stmt.branches.items.len > 1) {
-                                    return stmt.branches.items[1].eval(scope);
-                                }
-                            },
-                            else => return .{ .err = .{ .type = .{ .IncorrectType = "bool" } } },
+                        if (condition_value.is_truthy()) {
+                            return stmt.branches.items[0].eval(scope);
+                        } else if (stmt.branches.items.len > 1) {
+                            return stmt.branches.items[1].eval(scope);
                         }
                     },
                     .err => |err| return .{ .err = err },
+                }
+
+                return .{ .ok = .nil };
+            },
+            .while_stmt => |stmt| {
+                var should_repeat = true;
+
+                while (should_repeat) {
+                    switch (try evaluate.evaluate(stmt.condition, scope)) {
+                        .ok => |condition_value| {
+                            if (condition_value.is_truthy()) {
+                                switch (try stmt.branches.items[0].eval(scope)) {
+                                    .err => |err| return .{ .err = err },
+                                    else => {},
+                                }
+                            } else {
+                                should_repeat = false;
+                            }
+                        },
+                        .err => return .{ .err = .{ .type = .{ .IncorrectType = "bool" } } },
+                    }
                 }
 
                 return .{ .ok = .nil };
@@ -130,11 +147,14 @@ pub const Statement = struct {
             .print => |expr| try writer.print("print {s};", .{expr}),
             .expression => |expr| try writer.print("{s};", .{expr}),
             .if_stmt => |stmt| {
-                try writer.print("if ({s})\n{{\n{s}\n}}", .{ stmt.condition, stmt.branches.items[0] });
+                try writer.print("if {s}\n{{\n{s}\n}}", .{ stmt.condition, stmt.branches.items[0] });
 
                 if (stmt.branches.items.len > 1) {
                     try writer.print("\nelse\n{{\n{s}\n}}", .{stmt.branches.items[1]});
                 }
+            },
+            .while_stmt => |stmt| {
+                try writer.print("while {s}\n{{\n{s}\n}}", .{ stmt.condition, stmt.branches.items[0] });
             },
         }
     }
@@ -142,6 +162,10 @@ pub const Statement = struct {
     pub fn parse(stream: *TokenStream) !StatementResult {
         if (match(stream, &.{.IF})) {
             return try parse_if_stmt(stream);
+        }
+
+        if (match(stream, &.{.WHILE})) {
+            return try parse_while_stmt(stream);
         }
 
         if (match(stream, &.{.LEFT_BRACE})) {
@@ -186,6 +210,29 @@ pub const Statement = struct {
         }
 
         return .{ .ok = .{ .type = .{ .if_stmt = .{
+            .condition = condition,
+            .branches = branches,
+        } } } };
+    }
+
+    fn parse_while_stmt(stream: *TokenStream) (std.mem.Allocator.Error || ParseErrorType)!StatementResult {
+        _ = try consume(stream, .WHILE);
+        _ = try consume(stream, .LEFT_PAREN);
+
+        const condition = switch (try Expression.parse(stream)) {
+            .ok => |expr| expr,
+            .err => |err| return .{ .err = err },
+        };
+
+        _ = try consume(stream, .RIGHT_PAREN);
+
+        var branches = ArrayList(Statement).init(std.heap.page_allocator);
+        switch (try Statement.parse(stream)) {
+            .ok => |stmt| try branches.append(stmt),
+            .err => |err| return .{ .err = err },
+        }
+
+        return .{ .ok = .{ .type = .{ .while_stmt = .{
             .condition = condition,
             .branches = branches,
         } } } };
