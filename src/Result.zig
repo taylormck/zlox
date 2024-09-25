@@ -18,5 +18,13 @@ pub fn Result(comptime T: type, comptime Error: type) type {
                 .err => error.UnwrappedError,
             };
         }
+
+        pub fn ok(t: T) Self {
+            return .{ .ok = t };
+        }
+
+        pub fn err(e: Error) Self {
+            return .{ .err = e };
+        }
     };
 }

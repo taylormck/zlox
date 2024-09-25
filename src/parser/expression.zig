@@ -30,6 +30,8 @@ const ExpressionType = union(enum) {
 };
 
 const ExpressionResult = Result(Expression, ParseError);
+const Ok = ExpressionResult.ok;
+const Err = ExpressionResult.err;
 
 pub const Expression = struct {
     type: ExpressionType,
@@ -111,15 +113,15 @@ pub const Expression = struct {
                             var children = ArrayList(Expression).init(std.heap.page_allocator);
                             try children.append(rhs);
 
-                            return .{ .ok = .{
+                            return Ok(.{
                                 .type = .{ .assignment = name },
                                 .children = children,
-                            } };
+                            });
                         },
-                        else => return .{ .err = .{
+                        else => return Err(.{
                             .type = error.InvalidAssignmentTarget,
                             .token = try stream.previous(),
-                        } },
+                        }),
                     }
                 },
                 else => return .{ .err = .{
@@ -129,7 +131,7 @@ pub const Expression = struct {
             }
         }
 
-        return .{ .ok = lhs };
+        return Ok(lhs);
     }
 
     fn parse_logic_or(stream: *TokenStream) !ExpressionResult {
@@ -161,7 +163,7 @@ pub const Expression = struct {
             };
         }
 
-        return .{ .ok = lhs };
+        return Ok(lhs);
     }
 
     fn parse_logic_and(stream: *TokenStream) !ExpressionResult {
@@ -194,7 +196,7 @@ pub const Expression = struct {
             };
         }
 
-        return .{ .ok = lhs };
+        return Ok(lhs);
     }
 
     fn parse_equality(stream: *TokenStream) !ExpressionResult {
@@ -227,10 +229,10 @@ pub const Expression = struct {
             const equality_type: Operator = switch (op.type) {
                 .EQUAL_EQUAL => .equal,
                 .BANG_EQUAL => .not_equal,
-                else => return .{ .err = ParseError{
+                else => return Err(.{
                     .type = error.UnexpectedToken,
                     .token = op,
-                } },
+                }),
             };
 
             lhs = .{
@@ -239,7 +241,7 @@ pub const Expression = struct {
             };
         }
 
-        return .{ .ok = lhs };
+        return Ok(lhs);
     }
 
     fn parse_comparison(stream: *TokenStream) !ExpressionResult {
@@ -271,10 +273,10 @@ pub const Expression = struct {
                 .LESS_EQUAL => .less_equal,
                 .GREATER => .greater,
                 .GREATER_EQUAL => .greater_equal,
-                else => return .{ .err = ParseError{
+                else => return Err(.{
                     .type = error.UnexpectedToken,
                     .token = op,
-                } },
+                }),
             };
 
             lhs = .{
@@ -283,7 +285,7 @@ pub const Expression = struct {
             };
         }
 
-        return .{ .ok = lhs };
+        return Ok(lhs);
     }
 
     fn parse_term(stream: *TokenStream) !ExpressionResult {
@@ -312,10 +314,10 @@ pub const Expression = struct {
             const term_type: Operator = switch (op.type) {
                 .PLUS => .add,
                 .MINUS => .subtract,
-                else => return .{ .err = ParseError{
+                else => return Err(.{
                     .type = error.UnexpectedToken,
                     .token = op,
-                } },
+                }),
             };
 
             lhs = .{
@@ -324,7 +326,7 @@ pub const Expression = struct {
             };
         }
 
-        return .{ .ok = lhs };
+        return Ok(lhs);
     }
 
     fn parse_factor(stream: *TokenStream) !ExpressionResult {
@@ -354,10 +356,10 @@ pub const Expression = struct {
             const factor_type: Operator = switch (op.type) {
                 .STAR => .multiply,
                 .SLASH => .divide,
-                else => return .{ .err = ParseError{
+                else => return Err(.{
                     .type = error.UnexpectedToken,
                     .token = op,
-                } },
+                }),
             };
 
             lhs = .{
@@ -366,7 +368,7 @@ pub const Expression = struct {
             };
         }
 
-        return .{ .ok = lhs };
+        return Ok(lhs);
     }
 
     fn parse_unary(stream: *TokenStream) !ExpressionResult {
@@ -386,16 +388,16 @@ pub const Expression = struct {
             const unary_type: Operator = switch (op.type) {
                 .MINUS => .minus,
                 .BANG => .negate,
-                else => return .{ .err = ParseError{
+                else => return Err(.{
                     .type = error.UnexpectedToken,
                     .token = op,
-                } },
+                }),
             };
 
-            return .{ .ok = .{
+            return Ok(.{
                 .type = .{ .unary = unary_type },
                 .children = children,
-            } };
+            });
         }
 
         return parse_primary(stream);
@@ -411,25 +413,25 @@ pub const Expression = struct {
             .TRUE => .{ .bool = true },
             .FALSE => .{ .bool = false },
             .NUMBER => .{
-                .number = std.fmt.parseFloat(f64, current_token.lexeme) catch return .{
-                    .err = ParseError{
+                .number = std.fmt.parseFloat(f64, current_token.lexeme) catch {
+                    return Err(.{
                         .type = error.UnexpectedToken,
                         .token = current_token,
-                    },
+                    });
                 },
             },
             .STRING => .{ .string = current_token.literal },
             .IDENTIFIER => .{ .identifier = current_token.lexeme },
             .LEFT_PAREN => return parse_group(stream),
-            else => return .{ .err = ParseError{
+            else => return Err(.{
                 .type = error.UnexpectedToken,
                 .token = current_token,
-            } },
+            }),
         };
 
-        return .{ .ok = .{
+        return Ok(.{
             .type = .{ .literal = literal_type },
-        } };
+        });
     }
 
     fn parse_group(stream: *TokenStream) error{ OutOfMemory, UnwrappedError }!ExpressionResult {
@@ -442,16 +444,16 @@ pub const Expression = struct {
                 var expression_list = ArrayList(Expression).init(std.heap.page_allocator);
                 try expression_list.append(expr);
 
-                return .{ .ok = .{
+                return Ok(.{
                     .type = .grouping,
                     .children = expression_list,
-                } };
+                });
             }
         }
 
-        return .{ .err = ParseError{
+        return Err(.{
             .token = try stream.previous(),
             .type = error.UnexpectedToken,
-        } };
+        });
     }
 };

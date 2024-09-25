@@ -346,9 +346,7 @@ pub const Statement = struct {
                         } };
                     }
                 },
-                .err => |err| {
-                    return .{ .err = err };
-                },
+                .err => |err| return StatementResult.err(err),
             }
         } else |err| {
             return err;
