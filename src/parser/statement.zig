@@ -34,7 +34,7 @@ const StatementType = union(enum) {
     print: Expression,
     expression: Expression,
     if_stmt: struct { condition: Expression, branches: ArrayList(Statement) },
-    while_stmt: struct { condition: Expression, branches: ArrayList(Statement) },
+    while_stmt: struct { condition: Expression, body: ArrayList(Statement) },
 };
 
 const StatementResult = Result(Statement, ParseError);
@@ -82,7 +82,7 @@ pub const Statement = struct {
                         break;
                     }
 
-                    const block_result = try stmt.branches.items[0].eval(scope);
+                    const block_result = try stmt.body.items[0].eval(scope);
 
                     if (!block_result.is_ok()) {
                         const err = block_result.unwrap_err() catch unreachable;
@@ -154,19 +154,23 @@ pub const Statement = struct {
             .print => |expr| try writer.print("print {s};", .{expr}),
             .expression => |expr| try writer.print("{s};", .{expr}),
             .if_stmt => |stmt| {
-                try writer.print("if {s}\n{{\n{s}\n}}", .{ stmt.condition, stmt.branches.items[0] });
+                try writer.print("if {s}\n{s}\n", .{ stmt.condition, stmt.branches.items[0] });
 
                 if (stmt.branches.items.len > 1) {
-                    try writer.print("\nelse\n{{\n{s}\n}}", .{stmt.branches.items[1]});
+                    try writer.print("\nelse\n{s}\n", .{stmt.branches.items[1]});
                 }
             },
             .while_stmt => |stmt| {
-                try writer.print("while {s}\n{{\n{s}\n}}", .{ stmt.condition, stmt.branches.items[0] });
+                try writer.print("while {s}\n{s}\n", .{ stmt.condition, stmt.body.items[0] });
             },
         }
     }
 
     pub fn parse(stream: *TokenStream) !StatementResult {
+        if (match(stream, &.{.FOR})) {
+            return try parse_for_stmt(stream);
+        }
+
         if (match(stream, &.{.IF})) {
             return try parse_if_stmt(stream);
         }
@@ -188,6 +192,96 @@ pub const Statement = struct {
         }
 
         return try parse_expression_statement(stream);
+    }
+
+    fn parse_for_stmt(stream: *TokenStream) (std.mem.Allocator.Error || StatementParseErrorSet)!StatementResult {
+        _ = consume(stream, .FOR) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
+
+        _ = consume(stream, .LEFT_PAREN) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
+
+        var initializer = Statement{ .type = .{ .expression = .{ .type = .{ .literal = .nil } } } };
+        var condition = Expression{ .type = .{ .literal = .nil } };
+        var update = Expression{ .type = .{ .literal = .nil } };
+
+        if (!match(stream, &.{.SEMICOLON})) {
+            const init_result = try Statement.parse(stream);
+
+            if (!init_result.is_ok()) {
+                return init_result;
+            }
+
+            initializer = init_result.unwrap() catch unreachable;
+        }
+
+        if (!match(stream, &.{.SEMICOLON})) {
+            const condition_result = try Expression.parse(stream);
+
+            if (!condition_result.is_ok()) {
+                const err = condition_result.unwrap_err() catch unreachable;
+                return StatementErr(err);
+            }
+
+            condition = condition_result.unwrap() catch unreachable;
+        }
+
+        _ = consume(stream, .SEMICOLON) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
+
+        if (!match(stream, &.{.RIGHT_PAREN})) {
+            const update_result = try Expression.parse(stream);
+
+            if (!update_result.is_ok()) {
+                const err = update_result.unwrap_err() catch unreachable;
+                return StatementErr(err);
+            }
+
+            update = update_result.unwrap() catch unreachable;
+        }
+
+        _ = consume(stream, .RIGHT_PAREN) catch {
+            return StatementErr(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        };
+
+        const body_result = try Statement.parse(stream);
+
+        if (!body_result.is_ok()) {
+            const err = body_result.unwrap_err() catch unreachable;
+            return StatementErr(err);
+        }
+
+        const inner_body = body_result.unwrap() catch unreachable;
+        var outer_body_statements = ArrayList(Statement).init(std.heap.page_allocator);
+        try outer_body_statements.append(inner_body);
+        try outer_body_statements.append(Statement{ .type = .{ .expression = update } });
+        const outer_body_statement = Statement{ .type = .{ .block = outer_body_statements.items } };
+        var while_body = ArrayList(Statement).init(std.heap.page_allocator);
+        try while_body.append(outer_body_statement);
+
+        var statements = ArrayList(Statement).init(std.heap.page_allocator);
+        try statements.append(initializer);
+        try statements.append(Statement{ .type = .{ .while_stmt = .{
+            .condition = condition,
+            .body = while_body,
+        } } });
+
+        return StatementOk(.{ .type = .{ .block = statements.items } });
     }
 
     fn parse_if_stmt(stream: *TokenStream) StatementParseErrorSet!StatementResult {
@@ -265,16 +359,16 @@ pub const Statement = struct {
             });
         };
 
-        var branches = ArrayList(Statement).init(std.heap.page_allocator);
+        var body = ArrayList(Statement).init(std.heap.page_allocator);
 
         switch (try Statement.parse(stream)) {
-            .ok => |stmt| try branches.append(stmt),
+            .ok => |stmt| try body.append(stmt),
             .err => |err| return .{ .err = err },
         }
 
         return StatementOk(.{ .type = .{ .while_stmt = .{
             .condition = condition,
-            .branches = branches,
+            .body = body,
         } } });
     }
 

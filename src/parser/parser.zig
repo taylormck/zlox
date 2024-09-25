@@ -46,6 +46,7 @@ pub const ParseErrorType = error{
     UnexpectedToken,
     UnexpectedError,
     InvalidAssignmentTarget,
+    ExpectedAssignment,
 };
 
 pub const ParseError = struct {
@@ -74,6 +75,12 @@ pub const ParseError = struct {
             error.InvalidAssignmentTarget => {
                 try writer.print(
                     "[line {d}] Invalid assignment target: '{s}'.",
+                    .{ self.token.line, self.token.lexeme },
+                );
+            },
+            error.ExpectedAssignment => {
+                try writer.print(
+                    "[line {d}] Expected assignment but got: '{s}'.",
                     .{ self.token.line, self.token.lexeme },
                 );
             },
