@@ -9,8 +9,10 @@ pub const Token = struct {
     literal: []const u8 = "null",
     line: usize = 0,
 
+    const Self = @This();
+
     pub fn format(
-        self: *const @This(),
+        self: *const Self,
         comptime _: []const u8,
         _: std.fmt.FormatOptions,
         writer: anytype,

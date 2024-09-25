@@ -5,6 +5,7 @@
 const std = @import("std");
 const Expression = @import("parser/expression.zig").Expression;
 const Result = @import("Result.zig").Result;
+const ResultError = @import("Result.zig").ResultError;
 const Value = @import("Value.zig").Value;
 const Scope = @import("Scope.zig").Scope;
 

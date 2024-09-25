@@ -36,6 +36,7 @@ const StatementType = union(enum) {
 };
 
 const StatementResult = Result(Statement, ParseError);
+const StatementParseErrorSet = error{UnwrappedError} || std.mem.Allocator.Error || ParseErrorType;
 
 pub const Statement = struct {
     type: StatementType,
@@ -183,7 +184,7 @@ pub const Statement = struct {
         return try parse_expression_statement(stream);
     }
 
-    fn parse_if_stmt(stream: *TokenStream) (std.mem.Allocator.Error || ParseErrorType)!StatementResult {
+    fn parse_if_stmt(stream: *TokenStream) StatementParseErrorSet!StatementResult {
         _ = try consume(stream, .IF);
         _ = try consume(stream, .LEFT_PAREN);
 
@@ -215,7 +216,7 @@ pub const Statement = struct {
         } } } };
     }
 
-    fn parse_while_stmt(stream: *TokenStream) (std.mem.Allocator.Error || ParseErrorType)!StatementResult {
+    fn parse_while_stmt(stream: *TokenStream) StatementParseErrorSet!StatementResult {
         _ = try consume(stream, .WHILE);
         _ = try consume(stream, .LEFT_PAREN);
 
@@ -238,7 +239,7 @@ pub const Statement = struct {
         } } } };
     }
 
-    fn parse_block(stream: *TokenStream) (std.mem.Allocator.Error || ParseErrorType)!StatementResult {
+    fn parse_block(stream: *TokenStream) StatementParseErrorSet!StatementResult {
         _ = try consume(stream, .LEFT_BRACE);
 
         var statements = ArrayList(Statement).init(std.heap.page_allocator);
