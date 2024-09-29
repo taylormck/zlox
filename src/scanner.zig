@@ -286,6 +286,7 @@ test "it should scan a string" {
         .line = 1,
     };
 
+    try std.testing.expectEqual(0, output.errors.len);
     try std.testing.expectEqualDeep(expected_token, output.tokens[0]);
 }
 
@@ -300,7 +301,109 @@ test "it should update the line number after scanning a multiline string" {
         .line = 1,
     };
 
+    try std.testing.expectEqual(0, output.errors.len);
     try std.testing.expectEqual(extend_token_with_line(token.Dot, 1), output.tokens[0]);
     try std.testing.expectEqualDeep(expected_token, output.tokens[1]);
     try std.testing.expectEqual(extend_token_with_line(token.Dot, 2), output.tokens[2]);
+}
+
+test "it should scan integers" {
+    const input = "69";
+    const output = try scan(input);
+
+    const expected_token = token.Token{
+        .type = .NUMBER,
+        .lexeme = "69",
+        .literal = "69.0",
+        .line = 1,
+    };
+
+    try std.testing.expectEqual(0, output.errors.len);
+    try std.testing.expectEqualDeep(expected_token, output.tokens[0]);
+}
+
+test "it should scan floating point numbers" {
+    const input = "69.420";
+    const output = try scan(input);
+
+    const expected_token = token.Token{
+        .type = .NUMBER,
+        .lexeme = "69.420",
+        .literal = "69.42",
+        .line = 1,
+    };
+
+    try std.testing.expectEqual(0, output.errors.len);
+    try std.testing.expectEqualDeep(expected_token, output.tokens[0]);
+}
+
+test "it should scan identifiers" {
+    const input = "apple BANANA _citrus double_donut ECCENTRIC_ECLAIR blaze420";
+    const output = try scan(input);
+
+    const expected_tokens = [_]token.Token{
+        token.Token{
+            .type = .IDENTIFIER,
+            .lexeme = "apple",
+            .literal = "null",
+            .line = 1,
+        },
+
+        token.Token{
+            .type = .IDENTIFIER,
+            .lexeme = "BANANA",
+            .literal = "null",
+            .line = 1,
+        },
+        token.Token{
+            .type = .IDENTIFIER,
+            .lexeme = "_citrus",
+            .literal = "null",
+            .line = 1,
+        },
+        token.Token{
+            .type = .IDENTIFIER,
+            .lexeme = "double_donut",
+            .literal = "null",
+            .line = 1,
+        },
+        token.Token{
+            .type = .IDENTIFIER,
+            .lexeme = "ECCENTRIC_ECLAIR",
+            .literal = "null",
+            .line = 1,
+        },
+        token.Token{
+            .type = .IDENTIFIER,
+            .lexeme = "blaze420",
+            .literal = "null",
+            .line = 1,
+        },
+    };
+
+    try std.testing.expectEqual(0, output.errors.len);
+
+    for (0..expected_tokens.len) |i| {
+        try std.testing.expectEqualDeep(expected_tokens[i], output.tokens[i]);
+    }
+}
+
+test "it should process equal tokens" {
+    const input = "= == < <= > >=";
+    const output = try scan(input);
+
+    const expected_tokens = [_]token.Token{
+        extend_token_with_line(token.Equal, 1),
+        extend_token_with_line(token.EqualEqual, 1),
+        extend_token_with_line(token.Less, 1),
+        extend_token_with_line(token.LessEqual, 1),
+        extend_token_with_line(token.Greater, 1),
+        extend_token_with_line(token.GreaterEqual, 1),
+    };
+
+    try std.testing.expectEqual(0, output.errors.len);
+
+    for (0..expected_tokens.len) |i| {
+        try std.testing.expectEqualDeep(expected_tokens[i], output.tokens[i]);
+    }
 }
