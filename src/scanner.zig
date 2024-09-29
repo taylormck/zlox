@@ -11,7 +11,7 @@ const ScannerResults = struct {
     errors: []ScannerError,
 };
 
-pub fn scan(input: []u8) !ScannerResults {
+pub fn scan(input: []const u8) !ScannerResults {
     var stream = ByteStream.new(input);
 
     var current_line: usize = 1;
@@ -245,3 +245,24 @@ const ScannerError = struct {
         }
     }
 };
+
+test "it should scan basic tokens" {
+    const test_input = "(){},.-+;*=!<>";
+    const test_output = try scan(test_input);
+
+    try std.testing.expectEqual(0, test_output.errors.len);
+    try std.testing.expectEqual(extend_token_with_line(token.LeftParen, 1), test_output.tokens[0]);
+    try std.testing.expectEqual(extend_token_with_line(token.RightParen, 1), test_output.tokens[1]);
+    try std.testing.expectEqual(extend_token_with_line(token.LeftBrace, 1), test_output.tokens[2]);
+    try std.testing.expectEqual(extend_token_with_line(token.RightBrace, 1), test_output.tokens[3]);
+    try std.testing.expectEqual(extend_token_with_line(token.Comma, 1), test_output.tokens[4]);
+    try std.testing.expectEqual(extend_token_with_line(token.Dot, 1), test_output.tokens[5]);
+    try std.testing.expectEqual(extend_token_with_line(token.Minus, 1), test_output.tokens[6]);
+    try std.testing.expectEqual(extend_token_with_line(token.Plus, 1), test_output.tokens[7]);
+    try std.testing.expectEqual(extend_token_with_line(token.Semicolon, 1), test_output.tokens[8]);
+    try std.testing.expectEqual(extend_token_with_line(token.Star, 1), test_output.tokens[9]);
+    try std.testing.expectEqual(extend_token_with_line(token.Equal, 1), test_output.tokens[10]);
+    try std.testing.expectEqual(extend_token_with_line(token.Bang, 1), test_output.tokens[11]);
+    try std.testing.expectEqual(extend_token_with_line(token.Less, 1), test_output.tokens[12]);
+    try std.testing.expectEqual(extend_token_with_line(token.Greater, 1), test_output.tokens[13]);
+}
