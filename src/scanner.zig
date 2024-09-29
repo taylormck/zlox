@@ -81,7 +81,7 @@ pub fn scan(input: []const u8) !ScannerResults {
                     .type = .STRING,
                     .lexeme = string_content.items,
                     .literal = string_content.items[1 .. string_content.items.len - 1],
-                    .line = current_line,
+                    .line = starting_line,
                 };
 
                 try tokens.append(new_lexeme);
@@ -247,22 +247,60 @@ const ScannerError = struct {
 };
 
 test "it should scan basic tokens" {
-    const test_input = "(){},.-+;*=!<>";
-    const test_output = try scan(test_input);
+    const input = "(){},.-+;*=!<>";
+    const output = try scan(input);
 
-    try std.testing.expectEqual(0, test_output.errors.len);
-    try std.testing.expectEqual(extend_token_with_line(token.LeftParen, 1), test_output.tokens[0]);
-    try std.testing.expectEqual(extend_token_with_line(token.RightParen, 1), test_output.tokens[1]);
-    try std.testing.expectEqual(extend_token_with_line(token.LeftBrace, 1), test_output.tokens[2]);
-    try std.testing.expectEqual(extend_token_with_line(token.RightBrace, 1), test_output.tokens[3]);
-    try std.testing.expectEqual(extend_token_with_line(token.Comma, 1), test_output.tokens[4]);
-    try std.testing.expectEqual(extend_token_with_line(token.Dot, 1), test_output.tokens[5]);
-    try std.testing.expectEqual(extend_token_with_line(token.Minus, 1), test_output.tokens[6]);
-    try std.testing.expectEqual(extend_token_with_line(token.Plus, 1), test_output.tokens[7]);
-    try std.testing.expectEqual(extend_token_with_line(token.Semicolon, 1), test_output.tokens[8]);
-    try std.testing.expectEqual(extend_token_with_line(token.Star, 1), test_output.tokens[9]);
-    try std.testing.expectEqual(extend_token_with_line(token.Equal, 1), test_output.tokens[10]);
-    try std.testing.expectEqual(extend_token_with_line(token.Bang, 1), test_output.tokens[11]);
-    try std.testing.expectEqual(extend_token_with_line(token.Less, 1), test_output.tokens[12]);
-    try std.testing.expectEqual(extend_token_with_line(token.Greater, 1), test_output.tokens[13]);
+    try std.testing.expectEqual(0, output.errors.len);
+    try std.testing.expectEqual(extend_token_with_line(token.LeftParen, 1), output.tokens[0]);
+    try std.testing.expectEqual(extend_token_with_line(token.RightParen, 1), output.tokens[1]);
+    try std.testing.expectEqual(extend_token_with_line(token.LeftBrace, 1), output.tokens[2]);
+    try std.testing.expectEqual(extend_token_with_line(token.RightBrace, 1), output.tokens[3]);
+    try std.testing.expectEqual(extend_token_with_line(token.Comma, 1), output.tokens[4]);
+    try std.testing.expectEqual(extend_token_with_line(token.Dot, 1), output.tokens[5]);
+    try std.testing.expectEqual(extend_token_with_line(token.Minus, 1), output.tokens[6]);
+    try std.testing.expectEqual(extend_token_with_line(token.Plus, 1), output.tokens[7]);
+    try std.testing.expectEqual(extend_token_with_line(token.Semicolon, 1), output.tokens[8]);
+    try std.testing.expectEqual(extend_token_with_line(token.Star, 1), output.tokens[9]);
+    try std.testing.expectEqual(extend_token_with_line(token.Equal, 1), output.tokens[10]);
+    try std.testing.expectEqual(extend_token_with_line(token.Bang, 1), output.tokens[11]);
+    try std.testing.expectEqual(extend_token_with_line(token.Less, 1), output.tokens[12]);
+    try std.testing.expectEqual(extend_token_with_line(token.Greater, 1), output.tokens[13]);
+}
+
+test "it should update the line number when scanning new lines" {
+    const input = ".\n.";
+    const output = try scan(input);
+
+    try std.testing.expectEqual(extend_token_with_line(token.Dot, 1), output.tokens[0]);
+    try std.testing.expectEqual(extend_token_with_line(token.Dot, 2), output.tokens[1]);
+}
+
+test "it should scan a string" {
+    const input = "\"test\"";
+    const output = try scan(input);
+
+    const expected_token = token.Token{
+        .type = .STRING,
+        .lexeme = "\"test\"",
+        .literal = "test",
+        .line = 1,
+    };
+
+    try std.testing.expectEqualDeep(expected_token, output.tokens[0]);
+}
+
+test "it should update the line number after scanning a multiline string" {
+    const input = ".\"test\ntest\".";
+    const output = try scan(input);
+
+    const expected_token = token.Token{
+        .type = .STRING,
+        .lexeme = "\"test\ntest\"",
+        .literal = "test\ntest",
+        .line = 1,
+    };
+
+    try std.testing.expectEqual(extend_token_with_line(token.Dot, 1), output.tokens[0]);
+    try std.testing.expectEqualDeep(expected_token, output.tokens[1]);
+    try std.testing.expectEqual(extend_token_with_line(token.Dot, 2), output.tokens[2]);
 }
