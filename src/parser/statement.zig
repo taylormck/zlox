@@ -167,6 +167,18 @@ pub const Statement = struct {
     }
 
     pub fn parse(stream: *TokenStream) !StatementResult {
+        return parse_declaration(stream);
+    }
+
+    fn parse_declaration(stream: *TokenStream) !StatementResult {
+        if (match(stream, &.{.VAR})) {
+            return try parse_var_declaration(stream);
+        }
+
+        return parse_statement(stream);
+    }
+
+    fn parse_statement(stream: *TokenStream) !StatementResult {
         if (match(stream, &.{.FOR})) {
             return try parse_for_stmt(stream);
         }
@@ -181,10 +193,6 @@ pub const Statement = struct {
 
         if (match(stream, &.{.LEFT_BRACE})) {
             return try parse_block(stream);
-        }
-
-        if (match(stream, &.{.VAR})) {
-            return try parse_declaration(stream);
         }
 
         if (match(stream, &.{.PRINT})) {
@@ -312,7 +320,7 @@ pub const Statement = struct {
         };
 
         var branches = ArrayList(Statement).init(std.heap.page_allocator);
-        switch (try Statement.parse(stream)) {
+        switch (try Statement.parse_statement(stream)) {
             .ok => |stmt| try branches.append(stmt),
             .err => |err| return StatementErr(err),
         }
@@ -320,7 +328,7 @@ pub const Statement = struct {
         if (match(stream, &.{.ELSE})) {
             _ = consume(stream, .ELSE) catch unreachable;
 
-            switch (try Statement.parse(stream)) {
+            switch (try Statement.parse_statement(stream)) {
                 .ok => |stmt| try branches.append(stmt),
                 .err => |err| return StatementErr(err),
             }
@@ -403,7 +411,7 @@ pub const Statement = struct {
         } });
     }
 
-    fn parse_declaration(stream: *TokenStream) !StatementResult {
+    fn parse_var_declaration(stream: *TokenStream) !StatementResult {
         _ = consume(stream, .VAR) catch {
             return StatementErr(.{
                 .type = error.UnexpectedToken,
