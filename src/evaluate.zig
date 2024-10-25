@@ -234,7 +234,7 @@ pub fn evaluate(expr: Expression, scope: *Scope) !EvaluateResult {
             const val = result.unwrap() catch unreachable;
 
             if (val.is_truthy()) {
-                return Ok(.{ .bool = true });
+                return Ok(val);
             }
 
             return evaluate(expr.children.items[1], scope);
