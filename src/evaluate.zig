@@ -252,7 +252,7 @@ pub fn evaluate(expr: Expression, scope: *Scope) !EvaluateResult {
                 return evaluate(expr.children.items[1], scope);
             }
 
-            return Ok(.{ .bool = false });
+            return Ok(val);
         },
     }
 }

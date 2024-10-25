@@ -41,10 +41,9 @@ pub const Value = union(enum) {
 
     pub fn is_truthy(self: Self) bool {
         return switch (self) {
-            .number => |num| num != 0,
             .bool => |val| val,
             .nil => false,
-            .string => |s| !std.mem.eql(u8, s, ""),
+            else => true,
         };
     }
 
