@@ -229,6 +229,8 @@ pub const Statement = struct {
             }
 
             initializer = init_result.unwrap() catch unreachable;
+        } else {
+            _ = consume(stream, .SEMICOLON) catch unreachable;
         }
 
         if (!match(stream, &.{.SEMICOLON})) {
