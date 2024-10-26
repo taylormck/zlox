@@ -222,7 +222,7 @@ pub const Statement = struct {
         var update = Expression{ .type = .{ .literal = .nil } };
 
         if (!match(stream, &.{.SEMICOLON})) {
-            const init_result = try Statement.parse(stream);
+            const init_result = try Statement.parse_declaration(stream);
 
             if (!init_result.is_ok()) {
                 return init_result;
@@ -269,7 +269,7 @@ pub const Statement = struct {
             });
         };
 
-        const body_result = try Statement.parse(stream);
+        const body_result = try Statement.parse_statement(stream);
 
         if (!body_result.is_ok()) {
             const err = body_result.unwrap_err() catch unreachable;
