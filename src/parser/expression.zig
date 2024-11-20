@@ -25,8 +25,14 @@ const ExpressionType = union(enum) {
     term: Operator,
     factor: Operator,
     unary: Operator,
+    call: FunctionInfo,
     literal: Literal,
     grouping,
+};
+
+const FunctionInfo = struct {
+    callee: []u8,
+    arguments: ArrayList(Expression),
 };
 
 const ExpressionResult = Result(Expression, ParseError);
@@ -78,6 +84,9 @@ pub const Expression = struct {
             },
             .logic_or => {
                 try writer.print("{s} or {s}", .{ self.children.items[0], self.children.items[1] });
+            },
+            .call => |function_info| {
+                try writer.print("{s}()", .{function_info.name});
             },
         }
     }
@@ -400,7 +409,75 @@ pub const Expression = struct {
             });
         }
 
-        return parse_primary(stream);
+        return parse_call(stream);
+    }
+
+    fn parse_call(stream: *TokenStream) !ExpressionResult {
+        var result = try parse_primary(stream);
+        if (!result.is_ok()) {
+            return result;
+        }
+
+        var expr = result.unwrap() catch unreachable;
+
+        while (true) {
+            if (match(stream, &.{.LEFT_PAREN})) {
+                _ = try consume(stream, .LEFT_PAREN);
+                result = try finish_parse_call(stream, expr);
+
+                if (!result.is_ok()) {
+                    return result;
+                }
+
+                expr = result.unwrap() catch unreachable;
+            } else {
+                break;
+            }
+        }
+
+        return expr;
+    }
+
+    fn finish_parse_call(stream: *TokenStream, callee: Expression) !ExpressionResult {
+        var arguments = ArrayList(Expression).init(std.heap.page_allocator);
+        errdefer arguments.deinit();
+
+        if (!match(stream, &.{.RIGHT_PAREN})) {
+            _ = try consume(stream, .RIGHT_PAREN);
+
+            var result = try parse_assignment(stream);
+
+            if (!result.is_ok()) {
+                return result;
+            }
+
+            var arg = result.unwrap() catch unreachable;
+
+            try arguments.append(arg);
+
+            while (match(stream, &.{.COMMA})) {
+                _ = try consume(stream, .COMMA);
+
+                result = try parse_assignment(stream);
+
+                if (!result.is_ok()) {
+                    return result;
+                }
+
+                arg = result.unwrap() catch unreachable;
+
+                try arguments.append(arg);
+            }
+        }
+
+        if (!try consume(stream, .COMMA)) {
+            return Err(.{
+                .type = error.UnexpectedToken,
+                .token = try stream.previous(),
+            });
+        }
+
+        return .{ .call = .{ .callee = callee, .arguments = arguments } };
     }
 
     fn parse_primary(stream: *TokenStream) !ExpressionResult {
